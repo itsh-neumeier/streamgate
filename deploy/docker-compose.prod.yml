@@ -1,0 +1,57 @@
+services:
+  streamgate-backend:
+    image: ghcr.io/itsh-neumeier/streamgate-backend:latest
+    env_file: ../.env
+    environment:
+      TVHEADEND_CONNECTOR_URL: http://streamgate-tvheadend-connector:3100
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  streamgate-admin:
+    image: ghcr.io/itsh-neumeier/streamgate-admin:latest
+    restart: unless-stopped
+
+  streamgate-tvheadend-connector:
+    image: ghcr.io/itsh-neumeier/streamgate-tvheadend-connector:latest
+    env_file: ../.env
+    environment:
+      PORT: "3100"
+    restart: unless-stopped
+
+  streamgate-proxy:
+    image: ghcr.io/itsh-neumeier/streamgate-proxy:latest
+    ports:
+      - "8088:8080"
+    depends_on:
+      - streamgate-backend
+      - streamgate-tvheadend-connector
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    env_file: ../.env
+    volumes:
+      - streamgate-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-streamgate} -d ${POSTGRES_DB:-streamgate}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  streamgate-postgres:

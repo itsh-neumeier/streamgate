@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CustomerStatus {
+  active
+  suspended
+  deleted
+}
+
+enum DeviceStatus {
+  active
+  blocked
+  reset
+}
+
+enum ActivationCodeStatus {
+  unused
+  used
+  expired
+  revoked
+}
+
+enum StreamSessionStatus {
+  active
+  closed
+  expired
+  error
+}
+
+enum AppConfigScope {
+  global
+  customer
+  device
+}
+
+model Customer {
+  id                   String          @id
+  name                 String
+  status               CustomerStatus  @default(active)
+  packageId            String?
+  maxDevices           Int             @default(3)
+  maxConcurrentStreams Int             @default(2)
+  dvrEnabled           Boolean         @default(false)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  devices              Device[]
+  activationCodes      ActivationCode[]
+  streamSessions       StreamSession[]
+  recordings           Recording[]
+  dvrTimers            DvrTimer[]
+  tvheadendMapping     TvheadendUserMapping?
+}
+
+model Device {
+  id              String          @id
+  customerId      String
+  name            String
+  deviceTokenHash String
+  status          DeviceStatus    @default(active)
+  appVersion      String?
+  lastSeenAt      DateTime?
+  lastChannelId   String?
+  updateChannel   String          @default("stable")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  config          DeviceConfig?
+  streamSessions  StreamSession[]
+}
+
+model ActivationCode {
+  id             String               @id
+  code           String               @unique
+  customerId     String
+  expiresAt      DateTime
+  usedAt         DateTime?
+  usedByDeviceId String?
+  status         ActivationCodeStatus @default(unused)
+  customer       Customer             @relation(fields: [customerId], references: [id])
+}
+
+model Channel {
+  id                   String           @id
+  number               Int              @unique
+  name                 String
+  logoUrl              String?
+  groupId              String?
+  tvheadendChannelUuid String?
+  enabled              Boolean          @default(true)
+  adult                Boolean          @default(false)
+  defaultStreamProfile String            @default("hls-lan")
+  dvrAllowed           Boolean          @default(false)
+  sortOrder            Int              @default(0)
+  group                ChannelGroup?    @relation(fields: [groupId], references: [id])
+  packageChannels      PackageChannel[]
+}
+
+model ChannelGroup {
+  id        String    @id
+  name      String
+  sortOrder Int       @default(0)
+  channels  Channel[]
+}
+
+model ChannelPackage {
+  id              String           @id
+  name            String
+  description     String?
+  enabled         Boolean          @default(true)
+  packageChannels PackageChannel[]
+}
+
+model PackageChannel {
+  id        String         @id
+  packageId String
+  channelId String
+  package   ChannelPackage @relation(fields: [packageId], references: [id])
+  channel   Channel        @relation(fields: [channelId], references: [id])
+
+  @@unique([packageId, channelId])
+}
+
+model DeviceConfig {
+  id                 String  @id
+  deviceId           String  @unique
+  startScreen        String  @default("live_tv")
+  startChannelId     String?
+  streamProfile      String  @default("hls-lan")
+  dvrEnabled         Boolean @default(false)
+  timeshiftEnabled   Boolean @default(false)
+  favoritesEnabled   Boolean @default(true)
+  epgDays            Int     @default(3)
+  uiMode             String  @default("streamgate_lightweight")
+  animationsEnabled  Boolean @default(false)
+  maintenanceMessage String?
+  device             Device  @relation(fields: [deviceId], references: [id])
+}
+
+model StreamSession {
+  id              String              @id
+  customerId      String
+  deviceId        String
+  channelId       String
+  status          StreamSessionStatus @default(active)
+  openedAt        DateTime            @default(now())
+  closedAt        DateTime?
+  lastHeartbeatAt DateTime?
+  clientIp        String?
+  userAgent       String?
+  customer        Customer            @relation(fields: [customerId], references: [id])
+  device          Device              @relation(fields: [deviceId], references: [id])
+}
+
+model Recording {
+  id                   String   @id
+  customerId           String
+  deviceId             String?
+  tvheadendRecordingId String?
+  channelId            String
+  title                String
+  subtitle             String?
+  description          String?
+  startTime            DateTime
+  endTime              DateTime
+  status               String
+  customer             Customer @relation(fields: [customerId], references: [id])
+}
+
+model DvrTimer {
+  id                 String   @id
+  customerId         String
+  deviceId           String?
+  tvheadendTimerId   String?
+  channelId          String
+  title              String
+  startTime          DateTime
+  endTime            DateTime
+  status             String
+  customer           Customer @relation(fields: [customerId], references: [id])
+}
+
+model TvheadendUserMapping {
+  id                  String   @id
+  customerId          String   @unique
+  tvheadendUsername   String
+  tvheadendProfile    String
+  dvrProfile          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  customer            Customer @relation(fields: [customerId], references: [id])
+}
+
+model BrandingConfig {
+  id           String @id
+  tenantId     String
+  appName      String
+  logoUrl      String?
+  primaryColor String @default("#0066cc")
+  supportText  String?
+  imprintUrl   String?
+  privacyUrl   String?
+}
+
+model AppConfig {
+  id      String         @id
+  key     String
+  value   Json
+  scope   AppConfigScope @default(global)
+  scopeId String?
+}
+
+model AuditLog {
+  id         String   @id
+  actorId    String?
+  actorType  String
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}

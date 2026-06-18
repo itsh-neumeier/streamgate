@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.gradle/
+*.iml
+.idea/
+.env
+.env.local
+coverage/
+*.log
+*.tsbuildinfo
+apps/admin/vite.config.js
+apps/admin/vite.config.d.ts
+android-tv/local.properties
+apps/android-tv/local.properties

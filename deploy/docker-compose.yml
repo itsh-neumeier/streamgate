@@ -1,0 +1,86 @@
+services:
+  streamgate-backend:
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    container_name: streamgate-backend
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://streamgate:streamgate_dev_password@postgres:5432/streamgate?schema=public
+      REDIS_URL: redis://redis:6379
+      TVHEADEND_CONNECTOR_URL: http://streamgate-tvheadend-connector:3100
+      PUBLIC_BASE_URL: http://localhost:8088
+      MOCK_MODE: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      streamgate-tvheadend-connector:
+        condition: service_started
+
+  streamgate-admin:
+    build:
+      context: ..
+      dockerfile: apps/admin/Dockerfile
+    container_name: streamgate-admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - streamgate-backend
+
+  streamgate-tvheadend-connector:
+    build:
+      context: ..
+      dockerfile: services/tvheadend-connector/Dockerfile
+    container_name: streamgate-tvheadend-connector
+    env_file: ../.env
+    environment:
+      MOCK_MODE: "true"
+      PORT: "3100"
+    ports:
+      - "3100:3100"
+
+  streamgate-proxy:
+    build:
+      context: ..
+      dockerfile: services/proxy/Dockerfile
+    container_name: streamgate-proxy
+    ports:
+      - "8088:8080"
+    depends_on:
+      - streamgate-backend
+      - streamgate-tvheadend-connector
+
+  postgres:
+    image: postgres:16
+    container_name: streamgate-postgres
+    environment:
+      POSTGRES_DB: streamgate
+      POSTGRES_USER: streamgate
+      POSTGRES_PASSWORD: streamgate_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - streamgate-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamgate -d streamgate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: streamgate-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  streamgate-postgres:

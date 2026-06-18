@@ -1,0 +1,2 @@
+-- StreamGate local development database bootstrap.
+-- Prisma owns the application schema; this file is reserved for extensions and seed hooks.

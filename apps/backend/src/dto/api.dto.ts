@@ -1,0 +1,63 @@
+import { IsArray, IsIn, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+
+export class ActivateDeviceDto {
+  @IsString()
+  @IsNotEmpty()
+  activationCode!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  deviceName!: string;
+
+  @IsString()
+  @IsIn(['android_tv'])
+  deviceType!: string;
+
+  @IsString()
+  @IsOptional()
+  appVersion?: string;
+}
+
+export class HeartbeatDto {
+  @IsString()
+  deviceId!: string;
+
+  @IsString()
+  @IsOptional()
+  appVersion?: string;
+
+  @IsString()
+  @IsOptional()
+  currentScreen?: string;
+
+  @IsString()
+  @IsOptional()
+  currentChannel?: string;
+
+  @IsString()
+  @IsOptional()
+  playerState?: string;
+
+  @IsObject()
+  @IsOptional()
+  network?: Record<string, string>;
+}
+
+export class OpenStreamDto {
+  @IsString()
+  channelId!: string;
+
+  @IsString()
+  deviceId!: string;
+}
+
+export class CloseStreamDto {
+  @IsString()
+  streamSessionId!: string;
+}
+
+export class UpdateFavoritesDto {
+  @IsArray()
+  @IsString({ each: true })
+  channelIds!: string[];
+}
