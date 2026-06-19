@@ -1,0 +1,114 @@
+# StreamGate Portainer stack
+#
+# Recommended Portainer stack environment variables:
+# PUBLIC_BASE_URL=http://your-host:8088
+# POSTGRES_DB=streamgate
+# POSTGRES_USER=streamgate
+# POSTGRES_PASSWORD=replace-with-a-strong-password
+# DEVICE_TOKEN_SECRET=replace-with-long-random-secret
+# ADMIN_JWT_SECRET=replace-with-long-random-secret
+# STREAM_TOKEN_SECRET=replace-with-long-random-secret
+# MOCK_MODE=true
+# TVHEADEND_BASE_URL=http://tvheadend:9981
+# TVHEADEND_USERNAME=replace-me
+# TVHEADEND_PASSWORD=replace-me
+
+services:
+  streamgate-backend:
+    image: ghcr.io/itsh-neumeier/streamgate-backend:${STREAMGATE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      BACKEND_PORT: "3000"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8088}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-streamgate}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-streamgate}?schema=public
+      REDIS_URL: redis://redis:6379
+      TVHEADEND_CONNECTOR_URL: http://streamgate-tvheadend-connector:3100
+      DEVICE_TOKEN_SECRET: ${DEVICE_TOKEN_SECRET:-change-me-device-token-secret}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-change-me-admin-jwt-secret}
+      STREAM_TOKEN_SECRET: ${STREAM_TOKEN_SECRET:-change-me-stream-token-secret}
+      MOCK_MODE: ${MOCK_MODE:-true}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      streamgate-tvheadend-connector:
+        condition: service_healthy
+    networks:
+      - streamgate
+    restart: unless-stopped
+
+  streamgate-admin:
+    image: ghcr.io/itsh-neumeier/streamgate-admin:${STREAMGATE_TAG:-latest}
+    ports:
+      - "${ADMIN_PORT:-8080}:80"
+    networks:
+      - streamgate
+    restart: unless-stopped
+
+  streamgate-tvheadend-connector:
+    image: ghcr.io/itsh-neumeier/streamgate-tvheadend-connector:${STREAMGATE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      PORT: "3100"
+      MOCK_MODE: ${MOCK_MODE:-true}
+      TVHEADEND_BASE_URL: ${TVHEADEND_BASE_URL:-http://tvheadend:9981}
+      TVHEADEND_USERNAME: ${TVHEADEND_USERNAME:-replace-me}
+      TVHEADEND_PASSWORD: ${TVHEADEND_PASSWORD:-replace-me}
+      TVHEADEND_DEFAULT_PROFILE: ${TVHEADEND_DEFAULT_PROFILE:-pass}
+    networks:
+      - streamgate
+    restart: unless-stopped
+
+  streamgate-proxy:
+    image: ghcr.io/itsh-neumeier/streamgate-proxy:${STREAMGATE_TAG:-latest}
+    ports:
+      - "${PROXY_PORT:-8088}:8080"
+    depends_on:
+      streamgate-backend:
+        condition: service_started
+      streamgate-tvheadend-connector:
+        condition: service_started
+    networks:
+      - streamgate
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-streamgate}
+      POSTGRES_USER: ${POSTGRES_USER:-streamgate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - streamgate-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - streamgate
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - streamgate-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - streamgate
+    restart: unless-stopped
+
+volumes:
+  streamgate-postgres:
+  streamgate-redis:
+
+networks:
+  streamgate:
+    driver: bridge
