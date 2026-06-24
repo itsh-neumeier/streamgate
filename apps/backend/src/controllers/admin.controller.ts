@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { CreateActivationCodeDto, CreateCustomerDto, UpdateChannelDto, UpdateCustomerDto, UpdateDeviceDto } from '../dto/admin.dto';
 import { StreamGateService } from '../services/streamgate.service';
 
-@Controller('admin')
+@Controller(['admin', 'api/admin'])
 export class AdminController {
   constructor(private readonly streamGate: StreamGateService) {}
 
