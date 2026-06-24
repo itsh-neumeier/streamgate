@@ -275,7 +275,8 @@ export class StreamGateService {
     };
   }
 
-  channels() {
+  async channels() {
+    await this.refreshChannels();
     return { channels: this.channelsData.filter((channel) => channel.enabled).sort((a, b) => a.sortOrder - b.sortOrder) };
   }
 
@@ -309,6 +310,7 @@ export class StreamGateService {
   }
 
   async openStream(dto: OpenStreamDto, clientIp?: string, userAgent?: string | string[]) {
+    await this.refreshChannels();
     const device = this.devices.find((item) => item.id === dto.deviceId);
     if (!device || device.status !== 'active') {
       throw new UnauthorizedException('Geraet ist nicht aktiv.');
@@ -326,7 +328,7 @@ export class StreamGateService {
       throw new BadRequestException('Maximale parallele Streams erreicht.');
     }
 
-    await this.connector.openStream(channel.id, channel.defaultStreamProfile);
+    await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile);
     const streamSessionId = this.id('str');
     const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:8088';
     const url = `${publicBaseUrl}/stream/mock/${channel.id}.m3u8?session=${streamSessionId}&token=${this.id('tok')}`;
@@ -450,7 +452,8 @@ export class StreamGateService {
     return device;
   }
 
-  adminChannels() {
+  async adminChannels() {
+    await this.refreshChannels();
     return { channels: this.channelsData };
   }
 
@@ -501,6 +504,34 @@ export class StreamGateService {
       offlineDevices: Math.max(this.devices.length - onlineDevices, 0),
       tvheadendStatus: (process.env.MOCK_MODE ?? 'true') === 'true' ? 'mock' : 'configured'
     };
+  }
+
+  private async refreshChannels() {
+    const result = await this.connector.channels();
+    const existingByUuid = new Map(this.channelsData.map((channel) => [channel.tvheadendChannelUuid, channel]));
+
+    this.channelsData = result.channels.map((source, index) => {
+      const existing = existingByUuid.get(source.uuid);
+      return {
+        id: source.id,
+        number: source.number,
+        name: source.name,
+        logoUrl: existing?.logoUrl ?? '',
+        groupId: existing?.groupId ?? 'grp_tvheadend',
+        tvheadendChannelUuid: source.uuid,
+        enabled: source.enabled && (existing?.enabled ?? true),
+        adult: existing?.adult ?? false,
+        defaultStreamProfile: existing?.defaultStreamProfile ?? source.profile,
+        dvrAllowed: existing?.dvrAllowed ?? false,
+        sortOrder: source.number || index + 1,
+        favorite: existing?.favorite ?? false
+      };
+    });
+
+    const defaultPackage = this.packagesData.find((pkg) => pkg.id === 'pkg_basic_hd');
+    if (defaultPackage) {
+      defaultPackage.channelIds = this.channelsData.map((channel) => channel.id);
+    }
   }
 
   private resolveDevice(authorization?: string) {

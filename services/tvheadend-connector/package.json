@@ -8,11 +8,12 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "node --test"
+    "test": "npm run build && node --test dist/tvheadend-client.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.0.0",
+    "iptv-playlist-parser": "^0.15.2",
     "morgan": "^1.10.0"
   },
   "devDependencies": {

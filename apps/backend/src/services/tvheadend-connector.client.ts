@@ -4,14 +4,25 @@ import { Injectable } from '@nestjs/common';
 export class TvheadendConnectorClient {
   private readonly baseUrl = process.env.TVHEADEND_CONNECTOR_URL ?? 'http://localhost:3100';
 
-  async openStream(channelId: string, profile: string) {
-    if ((process.env.MOCK_MODE ?? 'true') === 'true') {
-      return {
-        sourceUrl: `${this.baseUrl}/stream/mock/${channelId}.m3u8?profile=${profile}`,
-        mimeType: 'application/x-mpegURL'
-      };
+  async channels() {
+    const response = await fetch(`${this.baseUrl}/channels`);
+    if (!response.ok) {
+      throw new Error(`TVHeadend connector channel request returned ${response.status}`);
     }
 
+    return response.json() as Promise<{
+      channels: Array<{
+        id: string;
+        uuid: string;
+        number: number;
+        name: string;
+        enabled: boolean;
+        profile: string;
+      }>;
+    }>;
+  }
+
+  async openStream(channelId: string, profile: string) {
     const response = await fetch(`${this.baseUrl}/streams/open`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
