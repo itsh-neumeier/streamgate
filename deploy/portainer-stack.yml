@@ -43,6 +43,9 @@ services:
     image: ghcr.io/itsh-neumeier/streamgate-admin:${STREAMGATE_TAG:-latest}
     ports:
       - "${ADMIN_PORT:-8080}:80"
+    depends_on:
+      streamgate-backend:
+        condition: service_started
     networks:
       - streamgate
     restart: unless-stopped
