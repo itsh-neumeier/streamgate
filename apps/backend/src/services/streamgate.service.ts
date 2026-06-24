@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, createHmac, randomBytes } from 'crypto';
 import { ActivateDeviceDto, HeartbeatDto, OpenStreamDto } from '../dto/api.dto';
 import { CreateActivationCodeDto, CreateCustomerDto, UpdateChannelDto, UpdateCustomerDto, UpdateDeviceDto } from '../dto/admin.dto';
 import { TvheadendConnectorClient } from './tvheadend-connector.client';
@@ -309,10 +309,10 @@ export class StreamGateService {
     return { from, to, channels: this.nowNext().items };
   }
 
-  async openStream(dto: OpenStreamDto, clientIp?: string, userAgent?: string | string[]) {
+  async openStream(dto: OpenStreamDto, authorization?: string, clientIp?: string, userAgent?: string | string[]) {
     await this.refreshChannels();
-    const device = this.devices.find((item) => item.id === dto.deviceId);
-    if (!device || device.status !== 'active') {
+    const device = this.authorizedDevice(dto.deviceId, authorization);
+    if (device.status !== 'active') {
       throw new UnauthorizedException('Geraet ist nicht aktiv.');
     }
     const customer = this.mustCustomer(device.customerId);
@@ -328,10 +328,19 @@ export class StreamGateService {
       throw new BadRequestException('Maximale parallele Streams erreicht.');
     }
 
-    await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile);
+    const stream = await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile);
     const streamSessionId = this.id('str');
     const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:8088';
-    const url = `${publicBaseUrl}/stream/mock/${channel.id}.m3u8?session=${streamSessionId}&token=${this.id('tok')}`;
+    const expiresIn = 60;
+    const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
+    const token = this.streamToken(streamSessionId, channel.tvheadendChannelUuid, channel.defaultStreamProfile, expiresAt);
+    const query = new URLSearchParams({
+      session: streamSessionId,
+      profile: channel.defaultStreamProfile,
+      expires: String(expiresAt),
+      token
+    });
+    const url = `${publicBaseUrl.replace(/\/$/, '')}/stream/channel/${encodeURIComponent(channel.tvheadendChannelUuid)}?${query}`;
     const session: StreamSession = {
       id: streamSessionId,
       customerId: customer.id,
@@ -345,7 +354,7 @@ export class StreamGateService {
       url
     };
     this.streamSessions.push(session);
-    return { streamSessionId, url, expiresIn: 60, mimeType: 'application/x-mpegURL' };
+    return { streamSessionId, url, expiresIn, mimeType: stream.mimeType };
   }
 
   closeStream(streamSessionId: string) {
@@ -534,6 +543,11 @@ export class StreamGateService {
     }
   }
 
+  private streamToken(sessionId: string, channelId: string, profile: string, expiresAt: number) {
+    const secret = process.env.STREAM_TOKEN_SECRET ?? 'change-me-stream-token-secret';
+    return createHmac('sha256', secret).update([sessionId, channelId, profile, expiresAt].join('\n')).digest('hex');
+  }
+
   private resolveDevice(authorization?: string) {
     const token = authorization?.replace(/^Bearer\s+/i, '');
     if (token) {
@@ -563,6 +577,20 @@ export class StreamGateService {
     };
     this.devices.push(seed);
     return seed;
+  }
+
+  private authorizedDevice(deviceId: string, authorization?: string) {
+    const token = authorization?.replace(/^Bearer\s+/i, '');
+    if (!token) {
+      throw new UnauthorizedException('Device Token fehlt.');
+    }
+
+    const tokenDeviceId = Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8');
+    const device = this.devices.find((item) => item.id === deviceId && item.id === tokenDeviceId && item.deviceTokenHash === this.hash(token));
+    if (!device) {
+      throw new UnauthorizedException('Device Token ist ungueltig.');
+    }
+    return device;
   }
 
   private mustCustomer(id: string) {

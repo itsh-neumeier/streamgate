@@ -33,6 +33,6 @@ export class TvheadendConnectorClient {
       throw new Error(`TVHeadend connector returned ${response.status}`);
     }
 
-    return response.json() as Promise<{ sourceUrl: string; mimeType: string }>;
+    return response.json() as Promise<{ channelId: string; mimeType: string }>;
   }
 }

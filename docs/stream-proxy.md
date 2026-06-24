@@ -15,7 +15,21 @@ Der Stream-Proxy schuetzt interne TVHeadend-URLs und stellt temporaere StreamGat
 Der MVP nutzt Nginx als Reverse Proxy fuer:
 
 - `/api/*` und `/admin/*` zum Backend.
-- `/connector/*` zum TVHeadend-Connector.
-- `/stream/*` fuer spaetere tokenisierte Streamweiterleitung.
+- `/stream/*` fuer tokenisierte Streamweiterleitung zum internen Connector.
 
-Die eigentliche Streamtoken-Pruefung ist als Backend/Proxy-Erweiterung vorbereitet.
+Der Connector ist nicht oeffentlich geroutet. Er prueft HMAC-Signatur und
+Ablaufzeit der Stream-URL, authentifiziert sich serverseitig bei TVHeadend und
+leitet den MPEG-TS-Datenstrom ohne Offenlegung der TVHeadend-Zugangsdaten weiter.
+
+## Manuell mit VLC testen
+
+1. Ein Geraet ueber `POST /api/device/activate` aktivieren und `deviceId` sowie
+   `deviceToken` aufbewahren.
+2. Einen Sender aus `GET /api/channels` auswaehlen.
+3. `POST /api/stream/open` mit `Authorization: Bearer <deviceToken>`,
+   `channelId` und `deviceId` aufrufen.
+4. Die zurueckgegebene `url` innerhalb von 60 Sekunden in VLC ueber
+   **Medien > Netzwerkstream oeffnen** starten.
+
+Das Device Token gehoert nur in den API-Aufruf. Es darf weder an VLC noch an
+TVHeadend weitergegeben werden.

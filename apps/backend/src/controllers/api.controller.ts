@@ -63,8 +63,8 @@ export class ApiController {
   }
 
   @Post('stream/open')
-  openStream(@Body() dto: OpenStreamDto, @Req() request: Request) {
-    return this.streamGate.openStream(dto, request.ip, request.headers['user-agent']);
+  openStream(@Body() dto: OpenStreamDto, @Headers('authorization') authorization: string | undefined, @Req() request: Request) {
+    return this.streamGate.openStream(dto, authorization, request.ip, request.headers['user-agent']);
   }
 
   @Post('stream/close')

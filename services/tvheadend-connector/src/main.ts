@@ -1,11 +1,16 @@
 import cors from 'cors';
 import express from 'express';
 import morgan from 'morgan';
-import { fetchTvheadendChannels, fetchTvheadendPlaylistChannels, type ConnectorChannel } from './tvheadend-client.js';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import type { ReadableStream } from 'node:stream/web';
+import { validateStreamToken } from './stream-token.js';
+import { fetchTvheadendChannels, fetchTvheadendPlaylistChannels, openTvheadendStream, type ConnectorChannel } from './tvheadend-client.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? process.env.TVHEADEND_CONNECTOR_PORT ?? 3100);
 const mockMode = (process.env.MOCK_MODE ?? 'true') === 'true';
+const streamTokenSecret = process.env.STREAM_TOKEN_SECRET ?? '';
 
 app.use(cors());
 app.use(express.json());
@@ -104,19 +109,66 @@ app.post('/streams/open', async (request, response) => {
 
     if (mockMode) {
       response.json({
-        sourceUrl: `http://streamgate-tvheadend-connector:${port}/stream/mock/${channel.id}.m3u8`,
+        channelId: channel.id,
         mimeType: 'application/x-mpegURL'
       });
       return;
     }
 
     response.json({
-      sourceUrl: `${tvheadendConfig.baseUrl.replace(/\/$/, '')}/stream/channel/${encodeURIComponent(channel.uuid)}?profile=${encodeURIComponent(String(request.body.profile ?? tvheadendConfig.profile))}`,
-      mimeType: 'application/x-mpegURL'
+      channelId: channel.uuid,
+      mimeType: 'video/mp2t'
     });
   } catch (cause) {
     console.error('TVHeadend stream preparation failed:', cause instanceof Error ? cause.message : cause);
     response.status(502).json({ message: 'TVHeadend-Stream konnte nicht vorbereitet werden.' });
+  }
+});
+
+app.get('/stream/channel/:channelId', async (request, response) => {
+  const data = {
+    sessionId: String(request.query.session ?? ''),
+    channelId: request.params.channelId,
+    profile: String(request.query.profile ?? tvheadendConfig.profile),
+    expiresAt: Number(request.query.expires)
+  };
+  const token = String(request.query.token ?? '');
+
+  if (!validateStreamToken(data, token, streamTokenSecret)) {
+    response.status(403).json({ message: 'Stream-Link ist ungueltig oder abgelaufen.' });
+    return;
+  }
+
+  if (mockMode) {
+    response.redirect(307, 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8');
+    return;
+  }
+
+  const abortController = new AbortController();
+  response.on('close', () => abortController.abort());
+
+  try {
+    const upstream = await openTvheadendStream(tvheadendConfig, data.channelId, data.profile, abortController.signal);
+    if (!upstream.ok || !upstream.body) {
+      response.status(502).json({ message: 'TVHeadend-Stream ist nicht verfuegbar.' });
+      return;
+    }
+
+    response.status(200);
+    response.setHeader('content-type', upstream.headers.get('content-type') ?? 'video/mp2t');
+    response.setHeader('cache-control', 'no-store');
+    response.setHeader('x-accel-buffering', 'no');
+    await pipeline(Readable.fromWeb(upstream.body as ReadableStream<Uint8Array>), response);
+  } catch (cause) {
+    if (abortController.signal.aborted) {
+      return;
+    }
+    console.error('TVHeadend stream proxy failed:', cause instanceof Error ? cause.message : cause);
+    if (!response.headersSent) {
+      response.status(502).json({ message: 'TVHeadend-Stream ist nicht verfuegbar.' });
+    } else {
+      response.destroy();
+    }
   }
 });
 
