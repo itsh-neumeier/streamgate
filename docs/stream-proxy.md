@@ -17,9 +17,11 @@ Der MVP nutzt Nginx als Reverse Proxy fuer:
 - `/api/*` und `/admin/*` zum Backend.
 - `/stream/*` fuer tokenisierte Streamweiterleitung zum internen Connector.
 
-Der Connector ist nicht oeffentlich geroutet. Er prueft HMAC-Signatur und
-Ablaufzeit der Stream-URL, authentifiziert sich serverseitig bei TVHeadend und
-leitet den MPEG-TS-Datenstrom ohne Offenlegung der TVHeadend-Zugangsdaten weiter.
+Der Connector ist nicht oeffentlich geroutet. Das Backend fordert intern ein
+zufaelliges, 60 Sekunden gueltiges Stream-Ticket an. Der Connector prueft das
+Ticket, authentifiziert sich serverseitig bei TVHeadend und leitet den
+MPEG-TS-Datenstrom ohne Offenlegung der TVHeadend-Zugangsdaten weiter. Ein
+gemeinsames Stream-Secret zwischen Backend und Connector ist nicht erforderlich.
 
 ## Manuell mit VLC testen
 

@@ -4,13 +4,13 @@ import morgan from 'morgan';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream } from 'node:stream/web';
-import { validateStreamToken } from './stream-token.js';
+import { StreamTicketStore } from './stream-tickets.js';
 import { fetchTvheadendChannels, fetchTvheadendPlaylistChannels, openTvheadendStream, type ConnectorChannel } from './tvheadend-client.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? process.env.TVHEADEND_CONNECTOR_PORT ?? 3100);
 const mockMode = (process.env.MOCK_MODE ?? 'true') === 'true';
-const streamTokenSecret = process.env.STREAM_TOKEN_SECRET ?? '';
+const streamTickets = new StreamTicketStore(60);
 
 app.use(cors());
 app.use(express.json());
@@ -108,16 +108,23 @@ app.post('/streams/open', async (request, response) => {
     }
 
     if (mockMode) {
+      const issued = streamTickets.issue(channel.id, channel.profile);
       response.json({
         channelId: channel.id,
-        mimeType: 'application/x-mpegURL'
+        mimeType: 'application/x-mpegURL',
+        ticket: issued.ticket,
+        expiresIn: issued.expiresIn
       });
       return;
     }
 
+    const profile = String(request.body.profile ?? tvheadendConfig.profile);
+    const issued = streamTickets.issue(channel.uuid, profile);
     response.json({
       channelId: channel.uuid,
-      mimeType: 'video/mp2t'
+      mimeType: 'video/mp2t',
+      ticket: issued.ticket,
+      expiresIn: issued.expiresIn
     });
   } catch (cause) {
     console.error('TVHeadend stream preparation failed:', cause instanceof Error ? cause.message : cause);
@@ -125,16 +132,9 @@ app.post('/streams/open', async (request, response) => {
   }
 });
 
-app.get('/stream/channel/:channelId', async (request, response) => {
-  const data = {
-    sessionId: String(request.query.session ?? ''),
-    channelId: request.params.channelId,
-    profile: String(request.query.profile ?? tvheadendConfig.profile),
-    expiresAt: Number(request.query.expires)
-  };
-  const token = String(request.query.token ?? '');
-
-  if (!validateStreamToken(data, token, streamTokenSecret)) {
+app.get('/stream/ticket/:ticket', async (request, response) => {
+  const streamTicket = streamTickets.resolve(request.params.ticket);
+  if (!streamTicket) {
     response.status(403).json({ message: 'Stream-Link ist ungueltig oder abgelaufen.' });
     return;
   }
@@ -148,7 +148,7 @@ app.get('/stream/channel/:channelId', async (request, response) => {
   response.on('close', () => abortController.abort());
 
   try {
-    const upstream = await openTvheadendStream(tvheadendConfig, data.channelId, data.profile, abortController.signal);
+    const upstream = await openTvheadendStream(tvheadendConfig, streamTicket.channelId, streamTicket.profile, abortController.signal);
     if (!upstream.ok || !upstream.body) {
       response.status(502).json({ message: 'TVHeadend-Stream ist nicht verfuegbar.' });
       return;
