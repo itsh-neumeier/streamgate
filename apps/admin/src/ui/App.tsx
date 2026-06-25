@@ -273,13 +273,15 @@ function StreamsView({ streams }: { streams: StreamSession[] }) {
 
 function WebPlayerView({ channels }: { channels: Channel[] }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const playerRef = useRef<{ unload: () => void; detachMediaElement: () => void; destroy: () => void } | null>(null);
+  const playerRef = useRef<ReturnType<typeof mpegts.createPlayer> | null>(null);
   const [activationCode, setActivationCode] = useState('');
   const [deviceId, setDeviceId] = useState(() => window.localStorage.getItem('streamgateWebDeviceId') ?? '');
   const [deviceToken, setDeviceToken] = useState(() => window.localStorage.getItem('streamgateWebDeviceToken') ?? '');
   const [selectedChannelId, setSelectedChannelId] = useState(() => channels[0]?.id ?? '');
   const [quality, setQuality] = useState<'hd' | 'sd-480p'>(() => (window.localStorage.getItem('streamgateWebQuality') === 'sd-480p' ? 'sd-480p' : 'hd'));
   const [activeStream, setActiveStream] = useState<StreamOpenResult | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -315,15 +317,22 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
       return;
     }
 
-    window.localStorage.setItem('streamgateWebQuality', quality);
-    const stream = await apiPost<StreamOpenResult>(
-      '/stream/open',
-      { channelId: selectedChannelId, deviceId, quality },
-      { Authorization: `Bearer ${deviceToken}` }
-    );
-    setActiveStream(stream);
-    attachStream(stream.url);
-    setMessage(`Stream gestartet: ${stream.qualityLabel}`);
+    try {
+      setStarting(true);
+      setMessage('Stream wird vorbereitet...');
+      window.localStorage.setItem('streamgateWebQuality', quality);
+      const stream = await apiPost<StreamOpenResult>(
+        '/stream/open',
+        { channelId: selectedChannelId, deviceId, quality },
+        { Authorization: `Bearer ${deviceToken}` }
+      );
+      setActiveStream(stream);
+      attachStream(stream.url, stream.qualityLabel);
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Stream konnte nicht gestartet werden.');
+    } finally {
+      setStarting(false);
+    }
   };
 
   const stop = async () => {
@@ -333,10 +342,12 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
     destroyPlayer(playerRef.current);
     playerRef.current = null;
     if (videoRef.current) {
+      videoRef.current.pause();
       videoRef.current.removeAttribute('src');
       videoRef.current.load();
     }
     setActiveStream(null);
+    setMuted(false);
     setMessage('Stream beendet.');
   };
 
@@ -346,33 +357,64 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
     setDeviceId('');
     setDeviceToken('');
     setActiveStream(null);
+    setMuted(false);
     destroyPlayer(playerRef.current);
     playerRef.current = null;
   };
 
-  const attachStream = (url: string) => {
+  const attachStream = (url: string, qualityLabel: string) => {
     const video = videoRef.current;
     if (!video) return;
     destroyPlayer(playerRef.current);
     playerRef.current = null;
+    video.pause();
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    setMuted(true);
+    setMessage(`Stream laedt: ${qualityLabel}. Start erfolgt zunaechst stumm.`);
 
     if (mpegts.isSupported()) {
-      const player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url });
+      const player = mpegts.createPlayer(
+        { type: 'mpegts', isLive: true, url },
+        { enableWorker: true, liveBufferLatencyChasing: true }
+      );
       playerRef.current = player;
+      player.on(mpegts.Events.ERROR, (_type, detail) => {
+        setMessage(`Player-Fehler: ${String(detail)}`);
+      });
       player.attachMediaElement(video);
       player.load();
-      void video.play().catch(() => setMessage('Autoplay blockiert. Bitte Play im Videoplayer druecken.'));
+      void video.play()
+        .then(() => setMessage(`Stream laeuft: ${qualityLabel}. Ton ist noch stumm.`))
+        .catch(() => setMessage('Stream ist geladen. Bitte Play im Videoplayer oder Ton einschalten druecken.'));
       return;
     }
 
+    setMessage('Dieser Browser unterstuetzt MPEG-TS per MediaSource nicht.');
     video.src = url;
-    void video.play().catch(() => setMessage('Autoplay blockiert. Bitte Play im Videoplayer druecken.'));
+  };
+
+  const enableSound = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = false;
+    setMuted(false);
+    void video.play().catch(() => setMessage('Bitte Play im Videoplayer druecken.'));
   };
 
   return (
     <section className="player-layout">
       <div className="player-surface">
-        <video ref={videoRef} className="webplayer-video" controls playsInline />
+        <video
+          ref={videoRef}
+          className="webplayer-video"
+          controls
+          muted={muted}
+          playsInline
+          onPlaying={() => setMessage(activeStream ? `Stream laeuft: ${activeStream.qualityLabel}${muted ? '. Ton ist noch stumm.' : ''}` : null)}
+          onError={() => setMessage('Video konnte nicht abgespielt werden. Bitte Stream neu starten.')}
+        />
       </div>
       <aside className="player-controls">
         <label>
@@ -403,7 +445,8 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
           </div>
         </div>
         <div className="player-actions">
-          <button className="primary" onClick={() => void start()}>Abspielen</button>
+          <button className="primary" disabled={starting} onClick={() => void start()}>{starting ? 'Startet...' : 'Abspielen'}</button>
+          {activeStream && muted ? <button onClick={enableSound}>Ton einschalten</button> : null}
           <button onClick={() => void stop()}>Stop</button>
         </div>
         {message ? <div className="notice compact">{message}</div> : null}
