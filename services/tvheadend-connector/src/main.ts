@@ -2,12 +2,13 @@ import cors from 'cors';
 import express from 'express';
 import morgan from 'morgan';
 import { pipeH264Transcode } from './ffmpeg-transcoder.js';
-import { StreamTicketStore, type StreamQuality } from './stream-tickets.js';
-import { fetchTvheadendChannels, fetchTvheadendPlaylistChannels, type ConnectorChannel } from './tvheadend-client.js';
+import { StreamTicketStore, type StreamMode, type StreamQuality } from './stream-tickets.js';
+import { fetchTvheadendChannels, fetchTvheadendPlaylistChannels, pipeTvheadendProfileStream, type ConnectorChannel } from './tvheadend-client.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? process.env.TVHEADEND_CONNECTOR_PORT ?? 3100);
 const mockMode = (process.env.MOCK_MODE ?? 'true') === 'true';
+const streamMode = normalizeStreamMode(process.env.STREAM_TRANSCODE_MODE);
 const streamTickets = new StreamTicketStore(60);
 
 app.use(cors());
@@ -41,14 +42,14 @@ async function channels(): Promise<ConnectorChannel[]> {
 }
 
 app.get('/health', (_request, response) => {
-  response.json({ status: 'ok', service: 'streamgate-tvheadend-connector', mode: mockMode ? 'mock' : 'tvheadend' });
+  response.json({ status: 'ok', service: 'streamgate-tvheadend-connector', mode: mockMode ? 'mock' : 'tvheadend', streamMode });
 });
 
 app.get('/stream-profiles', (_request, response) => {
   response.json({
     profiles: [
-      { id: 'hd', label: 'HD', description: 'Serverseitig als H.264 in Originalaufloesung transcodiert' },
-      { id: 'sd-480p', label: 'SD', description: 'Serverseitig als H.264 auf 480p transcodiert' }
+      { id: 'hd', label: 'HD', description: streamMode === 'tvheadend-profile' ? `TVHeadend-Profil ${qualityProfile('hd')}` : 'Serverseitig als H.264 in Originalaufloesung transcodiert' },
+      { id: 'sd-480p', label: 'SD', description: streamMode === 'tvheadend-profile' ? `TVHeadend-Profil ${qualityProfile('sd-480p')}` : 'Serverseitig als H.264 auf 480p transcodiert' }
     ]
   });
 });
@@ -116,7 +117,7 @@ app.post('/streams/open', async (request, response) => {
 
     if (mockMode) {
       const quality = normalizeQuality(request.body.quality);
-      const issued = streamTickets.issue(channel.id, channel.profile, quality);
+      const issued = streamTickets.issue(channel.id, channel.profile, quality, 'streamgate', 'application/x-mpegURL');
       response.json({
         channelId: channel.id,
         quality,
@@ -130,12 +131,16 @@ app.post('/streams/open', async (request, response) => {
 
     const profile = String(request.body.profile ?? tvheadendConfig.profile);
     const quality = normalizeQuality(request.body.quality);
-    const issued = streamTickets.issue(channel.uuid, profile, quality);
+    const selectedProfile = streamMode === 'tvheadend-profile' ? qualityProfile(quality) : profile;
+    const mimeType = streamMode === 'tvheadend-profile' ? qualityMimeType(quality) : 'video/mp2t';
+    const issued = streamTickets.issue(channel.uuid, selectedProfile, quality, streamMode, mimeType);
     response.json({
       channelId: channel.uuid,
       quality,
       label: qualityLabel(quality),
-      mimeType: 'video/mp2t',
+      profile: selectedProfile,
+      mode: streamMode,
+      mimeType,
       ticket: issued.ticket,
       expiresIn: issued.expiresIn
     });
@@ -161,6 +166,18 @@ app.get('/stream/ticket/:ticket', async (request, response) => {
   response.on('close', () => abortController.abort());
 
   try {
+    if (streamTicket.mode === 'tvheadend-profile') {
+      await pipeTvheadendProfileStream(
+        tvheadendConfig,
+        streamTicket.channelId,
+        streamTicket.profile,
+        abortController.signal,
+        response,
+        streamTicket.mimeType
+      );
+      return;
+    }
+
     await pipeH264Transcode(
       tvheadendConfig,
       {
@@ -208,4 +225,22 @@ function normalizeQuality(value: unknown): StreamQuality {
 
 function qualityLabel(quality: StreamQuality) {
   return quality === 'sd-480p' ? 'SD' : 'HD';
+}
+
+function normalizeStreamMode(value: unknown): StreamMode {
+  return value === 'tvheadend-profile' ? 'tvheadend-profile' : 'streamgate';
+}
+
+function qualityProfile(quality: StreamQuality) {
+  if (quality === 'sd-480p') {
+    return process.env.TVHEADEND_SD_PROFILE ?? process.env.TVHEADEND_DEFAULT_PROFILE ?? 'pass';
+  }
+  return process.env.TVHEADEND_HD_PROFILE ?? process.env.TVHEADEND_DEFAULT_PROFILE ?? 'pass';
+}
+
+function qualityMimeType(quality: StreamQuality) {
+  if (quality === 'sd-480p') {
+    return process.env.TVHEADEND_SD_MIME_TYPE ?? process.env.TVHEADEND_PROFILE_MIME_TYPE ?? 'video/mp2t';
+  }
+  return process.env.TVHEADEND_HD_MIME_TYPE ?? process.env.TVHEADEND_PROFILE_MIME_TYPE ?? 'video/mp2t';
 }

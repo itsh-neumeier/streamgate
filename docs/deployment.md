@@ -33,3 +33,6 @@ docker compose -f deploy/docker-compose.prod.yml up -d
   `VAAPI_RENDER_DEVICE=/dev/dri/renderD128` vorbereitet.
 - Ohne VAAPI kann `FFMPEG_TRANSCODER=software` genutzt werden. Dann sollte der
   Device-Mount aus der Stack-Datei entfernt werden.
+- Alternativ kann `STREAM_TRANSCODE_MODE=tvheadend-profile` gesetzt werden.
+  Dann nutzt StreamGate die TVHeadend-Profile `TVHEADEND_HD_PROFILE` und
+  `TVHEADEND_SD_PROFILE` statt eigener FFmpeg-Transcodierung.

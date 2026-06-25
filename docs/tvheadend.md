@@ -10,7 +10,7 @@ Der Connector kapselt TVHeadend serverseitig. Clients sprechen nie direkt mit TV
 - DVR-Timer erstellen und loeschen.
 - TVHeadend-User-Mapping vorbereiten.
 - Interne Stream-Tickets erzeugen.
-- TVHeadend-Streams per FFmpeg nach H.264/AAC transcodieren.
+- TVHeadend-Streams per StreamGate-FFmpeg oder per TVHeadend-Profil ausliefern.
 - Mock-Modus bereitstellen.
 
 ## Umgebungsvariablen
@@ -20,6 +20,10 @@ Der Connector kapselt TVHeadend serverseitig. Clients sprechen nie direkt mit TV
 - `TVHEADEND_USERNAME`
 - `TVHEADEND_PASSWORD`
 - `TVHEADEND_DEFAULT_PROFILE`
+- `STREAM_TRANSCODE_MODE=streamgate`
+- `TVHEADEND_HD_PROFILE=prd-matroska_h264_transcode`
+- `TVHEADEND_SD_PROFILE=prd-matroska_h264_transcode_sd`
+- `TVHEADEND_PROFILE_MIME_TYPE=video/x-matroska`
 - `FFMPEG_TRANSCODER=vaapi`
 - `VAAPI_DEVICE=/dev/dri/renderD128`
 - `HD_VIDEO_BITRATE=5500k`
@@ -44,9 +48,21 @@ Fuer Nutzer gibt es zwei Qualitaeten:
 - `HD`: H.264/AAC in Originalaufloesung.
 - `SD`: H.264/AAC in 480p.
 
-Beide Profile laufen ueber FFmpeg. Im VAAPI-Modus wird `h264_vaapi` genutzt,
-im Software-Modus `libx264`. Rohe TVHeadend-Stream-URLs werden nicht an Clients
-weitergegeben.
+Es gibt zwei Betriebsarten:
+
+- `STREAM_TRANSCODE_MODE=streamgate`: StreamGate holt den TVHeadend-Stream und
+  transcodiert selbst per FFmpeg nach H.264/AAC. Im VAAPI-Modus wird
+  `h264_vaapi` genutzt, im Software-Modus `libx264`.
+- `STREAM_TRANSCODE_MODE=tvheadend-profile`: StreamGate fordert je Qualitaet
+  ein TVHeadend-Streamprofil an und reicht diesen internen Profilstream ueber
+  das StreamGate-Ticket weiter. Fuer `HD` wird `TVHEADEND_HD_PROFILE`, fuer `SD`
+  `TVHEADEND_SD_PROFILE` genutzt.
+
+Rohe TVHeadend-Stream-URLs und Zugangsdaten werden in beiden Betriebsarten
+nicht an Clients weitergegeben. Wenn TVHeadend Matroska ausgibt
+(`video/x-matroska`), ist das fuer VLC und Android meist brauchbar, im Browser
+aber je nach Codec/Container nicht verlaesslich. Fuer den Admin-Webplayer sind
+MPEG-TS (`video/mp2t`) oder HLS die robusteren Ausgabeformen.
 
 ## Mock-Modus
 

@@ -40,6 +40,12 @@ services:
     environment:
       MOCK_MODE: "true"
       PORT: "3100"
+      STREAM_TRANSCODE_MODE: ${STREAM_TRANSCODE_MODE:-streamgate}
+      TVHEADEND_HD_PROFILE: ${TVHEADEND_HD_PROFILE:-prd-matroska_h264_transcode}
+      TVHEADEND_SD_PROFILE: ${TVHEADEND_SD_PROFILE:-prd-matroska_h264_transcode_sd}
+      TVHEADEND_PROFILE_MIME_TYPE: ${TVHEADEND_PROFILE_MIME_TYPE:-video/x-matroska}
+      TVHEADEND_HD_MIME_TYPE: ${TVHEADEND_HD_MIME_TYPE:-video/x-matroska}
+      TVHEADEND_SD_MIME_TYPE: ${TVHEADEND_SD_MIME_TYPE:-video/x-matroska}
       FFMPEG_TRANSCODER: ${FFMPEG_TRANSCODER:-software}
       FFMPEG_LOG_LEVEL: ${FFMPEG_LOG_LEVEL:-warning}
       VAAPI_DEVICE: ${VAAPI_DEVICE:-/dev/dri/renderD128}

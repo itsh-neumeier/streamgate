@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
-import { CreateActivationCodeDto, CreateCustomerDto, UpdateChannelDto, UpdateCustomerDto, UpdateDeviceDto } from '../dto/admin.dto';
+import { CreateActivationCodeDto, CreateCustomerDto, PreviewStreamDto, UpdateChannelDto, UpdateCustomerDto, UpdateDeviceDto, UpdatePackageDto } from '../dto/admin.dto';
 import { StreamGateService } from '../services/streamgate.service';
 
 @Controller(['admin', 'api/admin'])
@@ -72,13 +72,18 @@ export class AdminController {
   }
 
   @Put('packages/:id')
-  updatePackage(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+  updatePackage(@Param('id') id: string, @Body() body: UpdatePackageDto) {
     return this.streamGate.updatePackage(id, body);
   }
 
   @Get('streams/active')
   activeStreams() {
     return this.streamGate.activeStreams();
+  }
+
+  @Post('streams/preview')
+  previewStream(@Body() dto: PreviewStreamDto) {
+    return this.streamGate.previewStream(dto);
   }
 
   @Get('audit-log')

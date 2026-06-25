@@ -1,7 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { ActivateDeviceDto, HeartbeatDto, OpenStreamDto } from '../dto/api.dto';
-import { CreateActivationCodeDto, CreateCustomerDto, UpdateChannelDto, UpdateCustomerDto, UpdateDeviceDto } from '../dto/admin.dto';
+import {
+  CreateActivationCodeDto,
+  CreateCustomerDto,
+  PreviewStreamDto,
+  UpdateChannelDto,
+  UpdateCustomerDto,
+  UpdateDeviceDto,
+  UpdatePackageDto
+} from '../dto/admin.dto';
 import { TvheadendConnectorClient } from './tvheadend-connector.client';
 
 type Status = 'active' | 'blocked' | 'reset' | 'suspended' | 'deleted';
@@ -281,9 +289,14 @@ export class StreamGateService {
     };
   }
 
-  async channels() {
+  async channels(authorization?: string) {
     await this.refreshChannels();
-    return { channels: this.channelsData.filter((channel) => channel.enabled).sort((a, b) => a.sortOrder - b.sortOrder) };
+    const allowedChannelIds = this.allowedChannelIdsForAuthorization(authorization);
+    return {
+      channels: this.channelsData
+        .filter((channel) => channel.enabled && (!allowedChannelIds || allowedChannelIds.has(channel.id)))
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+    };
   }
 
   favoriteChannels() {
@@ -328,6 +341,10 @@ export class StreamGateService {
     const channel = this.channelsData.find((item) => item.id === dto.channelId && item.enabled);
     if (!channel) {
       throw new NotFoundException('Sender nicht gefunden.');
+    }
+    const customerPackage = this.packagesData.find((item) => item.id === customer.packageId && item.enabled);
+    if (!customerPackage || !customerPackage.channelIds.includes(channel.id)) {
+      throw new UnauthorizedException('Sender ist nicht im Kundenpaket enthalten.');
     }
     const activeCount = this.streamSessions.filter((session) => session.customerId === customer.id && session.status === 'active').length;
     if (activeCount >= customer.maxConcurrentStreams) {
@@ -400,6 +417,9 @@ export class StreamGateService {
   }
 
   createCustomer(dto: CreateCustomerDto) {
+    if (dto.packageId && !this.packagesData.some((pkg) => pkg.id === dto.packageId)) {
+      throw new NotFoundException('Paket nicht gefunden.');
+    }
     const now = new Date().toISOString();
     const customer: Customer = {
       id: this.id('cust'),
@@ -422,6 +442,9 @@ export class StreamGateService {
 
   updateCustomer(id: string, dto: UpdateCustomerDto) {
     const customer = this.mustCustomer(id);
+    if (dto.packageId && !this.packagesData.some((pkg) => pkg.id === dto.packageId)) {
+      throw new NotFoundException('Paket nicht gefunden.');
+    }
     Object.assign(customer, dto, { updatedAt: new Date().toISOString() });
     return customer;
   }
@@ -485,17 +508,51 @@ export class StreamGateService {
     return pkg;
   }
 
-  updatePackage(id: string, body: Record<string, unknown>) {
+  updatePackage(id: string, body: UpdatePackageDto) {
     const pkg = this.packagesData.find((item) => item.id === id);
     if (!pkg) {
       throw new NotFoundException('Paket nicht gefunden.');
     }
-    Object.assign(pkg, body);
+    if (body.name !== undefined) {
+      pkg.name = body.name;
+    }
+    if (body.description !== undefined) {
+      pkg.description = body.description;
+    }
+    if (body.enabled !== undefined) {
+      pkg.enabled = body.enabled;
+    }
+    if (body.channelIds !== undefined) {
+      const validChannelIds = new Set(this.channelsData.map((channel) => channel.id));
+      pkg.channelIds = body.channelIds.filter((channelId, index, all) => validChannelIds.has(channelId) && all.indexOf(channelId) === index);
+    }
     return pkg;
   }
 
   activeStreams() {
     return { streams: this.streamSessions.filter((session) => session.status === 'active') };
+  }
+
+  async previewStream(dto: PreviewStreamDto) {
+    await this.refreshChannels();
+    const channel = this.channelsData.find((item) => item.id === dto.channelId && item.enabled);
+    if (!channel) {
+      throw new NotFoundException('Sender nicht gefunden.');
+    }
+
+    const quality = this.normalizeQuality(dto.quality);
+    const stream = await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile, quality);
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:8088';
+    return {
+      streamSessionId: `preview_${randomBytes(6).toString('hex')}`,
+      url: `${publicBaseUrl.replace(/\/$/, '')}/stream/ticket/${encodeURIComponent(stream.ticket)}`,
+      expiresIn: stream.expiresIn,
+      mimeType: stream.mimeType,
+      quality,
+      qualityLabel: stream.label,
+      mode: stream.mode,
+      profile: stream.profile
+    };
   }
 
   auditLog() {
@@ -537,20 +594,34 @@ export class StreamGateService {
       };
     });
 
+    const availableChannelIds = new Set(this.channelsData.map((channel) => channel.id));
+    this.packagesData.forEach((pkg) => {
+      pkg.channelIds = pkg.channelIds.filter((channelId) => availableChannelIds.has(channelId));
+    });
+
     const defaultPackage = this.packagesData.find((pkg) => pkg.id === 'pkg_basic_hd');
     if (defaultPackage) {
-      defaultPackage.channelIds = this.channelsData.map((channel) => channel.id);
+      defaultPackage.channelIds = defaultPackage.channelIds.length > 0 ? defaultPackage.channelIds : this.channelsData.map((channel) => channel.id);
     }
   }
 
+  private allowedChannelIdsForAuthorization(authorization?: string) {
+    if (!authorization?.replace(/^Bearer\s+/i, '')) {
+      return null;
+    }
+    const device = this.deviceFromToken(authorization);
+    if (!device) {
+      return new Set<string>();
+    }
+    const customer = this.mustCustomer(device.customerId);
+    const customerPackage = this.packagesData.find((pkg) => pkg.id === customer.packageId && pkg.enabled);
+    return new Set(customerPackage?.channelIds ?? []);
+  }
+
   private resolveDevice(authorization?: string) {
-    const token = authorization?.replace(/^Bearer\s+/i, '');
-    if (token) {
-      const deviceId = Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8');
-      const device = this.devices.find((item) => item.id === deviceId && item.deviceTokenHash === this.hash(token));
-      if (device) {
-        return device;
-      }
+    const device = this.deviceFromToken(authorization);
+    if (device) {
+      return device;
     }
     if (this.devices[0]) {
       return this.devices[0];
@@ -572,6 +643,15 @@ export class StreamGateService {
     };
     this.devices.push(seed);
     return seed;
+  }
+
+  private deviceFromToken(authorization?: string) {
+    const token = authorization?.replace(/^Bearer\s+/i, '');
+    if (!token) {
+      return null;
+    }
+    const deviceId = Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8');
+    return this.devices.find((item) => item.id === deviceId && item.deviceTokenHash === this.hash(token)) ?? null;
   }
 
   private authorizedDevice(deviceId: string, authorization?: string) {

@@ -41,6 +41,10 @@ Liefert Kunde, Geraet, UI, Feature Flags, Limits und Branding.
 - `PUT /api/channels/favorites`
 - `GET /api/channels/groups`
 
+Mit Device Token liefert `GET /api/channels` nur Sender aus dem Paket des
+zugeordneten Kunden. Ohne Device Token wird fuer interne MVP-Tests die aktive
+Senderliste geliefert.
+
 ## Streams
 
 - `POST /api/stream/open`
@@ -59,8 +63,12 @@ Liefert Kunde, Geraet, UI, Feature Flags, Limits und Branding.
 
 Moegliche Werte:
 
-- `hd`: Nutzeranzeige `HD`, serverseitiges H.264/AAC-Transcoding in Originalaufloesung.
-- `sd-480p`: Nutzeranzeige `SD`, serverseitiges H.264/AAC-Transcoding auf 480p.
+- `hd`: Nutzeranzeige `HD`.
+- `sd-480p`: Nutzeranzeige `SD`.
+
+Die konkrete Streamerzeugung haengt von `STREAM_TRANSCODE_MODE` ab:
+`streamgate` transcodiert per StreamGate-FFmpeg, `tvheadend-profile` nutzt die
+konfigurierten TVHeadend-Profile fuer HD und SD.
 
 Antwort:
 
@@ -106,5 +114,10 @@ Im Mock-Modus erzeugt StreamGate HLS-Test-URLs ueber den Proxy, ohne TVHeadend z
 - `GET /admin/packages`
 - `POST /admin/packages`
 - `PUT /admin/packages/:id`
+- `POST /admin/streams/preview`
 - `GET /admin/streams/active`
 - `GET /admin/audit-log`
+
+`POST /admin/streams/preview` startet einen Admin-Teststream ohne
+Aktivierungscode, Device Token und Kunden-Streamlimit. Der Endpoint ist fuer den
+Admin-Webplayer gedacht und erzeugt keine normale `StreamSession`.

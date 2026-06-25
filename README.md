@@ -45,20 +45,27 @@ Das Android-Projekt liegt in `apps/android-tv`. Es nutzt Kotlin, Jetpack Compose
 ## Webplayer
 
 Der Admin-Container enthaelt einen Webplayer-Tab. Er wird wie ein Client per
-Aktivierungscode gebunden, nutzt Device Tokens und spielt temporaere
-StreamGate-URLs. Der Browser sieht keine TVHeadend-URL und keine Credentials.
+Admin-Preview-Endpunkt gestartet und braucht keinen Aktivierungscode, kein
+Device Token und kein Kunden-Streamlimit. Der Browser sieht keine TVHeadend-URL
+und keine Credentials.
 
 ## Transcoding
 
 Bei realem TVHeadend-Betrieb liefert StreamGate fuer Nutzer keine
-TVHeadend-Passthrough-Streams aus. Der Connector transcodiert per FFmpeg:
+TVHeadend-Passthrough-Streams aus. Es gibt zwei Betriebsarten:
 
-- `HD`: H.264/AAC in Originalaufloesung.
-- `SD`: H.264/AAC in 480p.
+- `STREAM_TRANSCODE_MODE=streamgate`: Der Connector transcodiert selbst per
+  FFmpeg. `HD` ist H.264/AAC in Originalaufloesung, `SD` ist H.264/AAC in 480p.
+- `STREAM_TRANSCODE_MODE=tvheadend-profile`: Der Connector nutzt die
+  TVHeadend-Profile `TVHEADEND_HD_PROFILE` und `TVHEADEND_SD_PROFILE`, gibt aber
+  weiterhin nur eine temporaere StreamGate-URL an Clients aus.
 
-Standard fuer Portainer/Produktion ist VAAPI (`FFMPEG_TRANSCODER=vaapi`) mit
-`/dev/dri/renderD128`. Fuer Hosts ohne Hardware-Encoding kann
-`FFMPEG_TRANSCODER=software` verwendet werden.
+Standard fuer StreamGate-FFmpeg in Portainer/Produktion ist VAAPI
+(`FFMPEG_TRANSCODER=vaapi`) mit `/dev/dri/renderD128`. Fuer Hosts ohne
+Hardware-Encoding kann `FFMPEG_TRANSCODER=software` verwendet werden. Wenn
+TVHeadend-Profile Matroska ausgeben, kann VLC/Android funktionieren, waehrend
+Browser je nach Container/Codec ablehnen; fuer den Admin-Webplayer sind
+MPEG-TS oder HLS robuster.
 
 ## GHCR Images
 
@@ -87,7 +94,7 @@ Produktive Deployments muessen HTTPS vor den Proxy setzen, Secrets per sicherem 
 
 ## TVHeadend
 
-TVHeadend-Zugangsdaten werden nur in Backend/Connector-Umgebungsvariablen konfiguriert. Android-App und Webplayer erhalten nur temporaere StreamGate-Stream-URLs.
+TVHeadend-Zugangsdaten werden nur in Backend/Connector-Umgebungsvariablen konfiguriert. Android-App und Webplayer erhalten nur temporaere StreamGate-Stream-URLs. Senderpakete werden in der Admin-Oberflaeche zusammengestellt und Kunden zugewiesen; Device-Streams duerfen nur Sender aus dem Kundenpaket oeffnen.
 
 ## Sicherheit
 

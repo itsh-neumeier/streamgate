@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mpegts from 'mpegts.js';
 import { apiGet, apiPost, apiPut } from '../api/client';
-import type { ActivationResult, Channel, ChannelPackage, Customer, Dashboard, Device, StreamOpenResult, StreamSession } from '../api/types';
+import type { Channel, ChannelPackage, Customer, Dashboard, Device, StreamOpenResult, StreamSession } from '../api/types';
 
 type Tab = 'dashboard' | 'customers' | 'devices' | 'channels' | 'packages' | 'streams' | 'player' | 'config';
 
@@ -58,10 +58,10 @@ export function App() {
 
   const content = useMemo(() => {
     if (activeTab === 'dashboard') return <DashboardView dashboard={dashboard} />;
-    if (activeTab === 'customers') return <CustomersView customers={customers} onRefresh={refresh} />;
+    if (activeTab === 'customers') return <CustomersView customers={customers} packages={packages} onRefresh={refresh} />;
     if (activeTab === 'devices') return <DevicesView devices={devices} onRefresh={refresh} />;
     if (activeTab === 'channels') return <ChannelsView channels={channels} onRefresh={refresh} />;
-    if (activeTab === 'packages') return <PackagesView packages={packages} onRefresh={refresh} />;
+    if (activeTab === 'packages') return <PackagesView packages={packages} channels={channels} onRefresh={refresh} />;
     if (activeTab === 'streams') return <StreamsView streams={streams} />;
     if (activeTab === 'player') return <WebPlayerView channels={channels.filter((channel) => channel.enabled)} />;
     return <ConfigView />;
@@ -119,9 +119,14 @@ function DashboardView({ dashboard }: { dashboard: Dashboard | null }) {
   );
 }
 
-function CustomersView({ customers, onRefresh }: { customers: Customer[]; onRefresh: () => Promise<void> }) {
+function CustomersView({ customers, packages, onRefresh }: { customers: Customer[]; packages: ChannelPackage[]; onRefresh: () => Promise<void> }) {
   const createCustomer = async () => {
     await apiPost('/admin/customers', { name: `Kunde ${customers.length + 1}`, packageId: 'pkg_basic_hd' });
+    await onRefresh();
+  };
+
+  const updateCustomer = async (customer: Customer, patch: Partial<Customer>) => {
+    await apiPut(`/admin/customers/${customer.id}`, patch);
     await onRefresh();
   };
 
@@ -139,12 +144,44 @@ function CustomersView({ customers, onRefresh }: { customers: Customer[]; onRefr
         <tbody>
           {customers.map((customer) => (
             <tr key={customer.id}>
-              <td>{customer.name}</td>
-              <td>{customer.status}</td>
-              <td>{customer.packageId}</td>
-              <td>{customer.maxDevices}</td>
-              <td>{customer.maxConcurrentStreams}</td>
-              <td>{customer.dvrEnabled ? 'aktiv' : 'aus'}</td>
+              <td>
+                <input
+                  className="table-input"
+                  defaultValue={customer.name}
+                  onBlur={(event) => event.target.value !== customer.name && void updateCustomer(customer, { name: event.target.value })}
+                />
+              </td>
+              <td>
+                <select className="table-input" value={customer.status} onChange={(event) => void updateCustomer(customer, { status: event.target.value })}>
+                  <option value="active">active</option>
+                  <option value="suspended">suspended</option>
+                  <option value="deleted">deleted</option>
+                </select>
+              </td>
+              <td>
+                <select className="table-input" value={customer.packageId} onChange={(event) => void updateCustomer(customer, { packageId: event.target.value })}>
+                  {packages.map((pkg) => <option key={pkg.id} value={pkg.id}>{pkg.name}</option>)}
+                </select>
+              </td>
+              <td>
+                <input
+                  className="table-number"
+                  type="number"
+                  min={1}
+                  defaultValue={customer.maxDevices}
+                  onBlur={(event) => void updateCustomer(customer, { maxDevices: Number(event.target.value) || 1 })}
+                />
+              </td>
+              <td>
+                <input
+                  className="table-number"
+                  type="number"
+                  min={1}
+                  defaultValue={customer.maxConcurrentStreams}
+                  onBlur={(event) => void updateCustomer(customer, { maxConcurrentStreams: Number(event.target.value) || 1 })}
+                />
+              </td>
+              <td><input type="checkbox" checked={customer.dvrEnabled} onChange={(event) => void updateCustomer(customer, { dvrEnabled: event.target.checked })} /></td>
               <td><button onClick={() => void createCode(customer.id)}>Code</button></td>
             </tr>
           ))}
@@ -220,30 +257,62 @@ function ChannelsView({ channels, onRefresh }: { channels: Channel[]; onRefresh:
   );
 }
 
-function PackagesView({ packages, onRefresh }: { packages: ChannelPackage[]; onRefresh: () => Promise<void> }) {
+function PackagesView({ packages, channels, onRefresh }: { packages: ChannelPackage[]; channels: Channel[]; onRefresh: () => Promise<void> }) {
   const createPackage = async () => {
     await apiPost('/admin/packages', { name: `Paket ${packages.length + 1}` });
     await onRefresh();
   };
 
+  const updatePackage = async (pkg: ChannelPackage, patch: Partial<ChannelPackage>) => {
+    await apiPut(`/admin/packages/${pkg.id}`, patch);
+    await onRefresh();
+  };
+
+  const toggleChannel = async (pkg: ChannelPackage, channelId: string) => {
+    const channelIds = pkg.channelIds.includes(channelId)
+      ? pkg.channelIds.filter((id) => id !== channelId)
+      : [...pkg.channelIds, channelId];
+    await updatePackage(pkg, { channelIds });
+  };
+
   return (
-    <DataSection action={<button onClick={() => void createPackage()}>Paket erstellen</button>}>
-      <table>
-        <thead>
-          <tr><th>Name</th><th>Beschreibung</th><th>Status</th><th>Sender</th></tr>
-        </thead>
-        <tbody>
-          {packages.map((pkg) => (
-            <tr key={pkg.id}>
-              <td>{pkg.name}</td>
-              <td>{pkg.description}</td>
-              <td>{pkg.enabled ? 'aktiv' : 'aus'}</td>
-              <td>{pkg.channelIds.length}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </DataSection>
+    <section className="package-editor">
+      <div className="section-actions">
+        <button onClick={() => void createPackage()}>Paket erstellen</button>
+      </div>
+      {packages.map((pkg) => (
+        <article className="package-panel" key={pkg.id}>
+          <div className="package-header">
+            <input
+              defaultValue={pkg.name}
+              onBlur={(event) => event.target.value !== pkg.name && void updatePackage(pkg, { name: event.target.value })}
+            />
+            <input
+              defaultValue={pkg.description}
+              placeholder="Beschreibung"
+              onBlur={(event) => event.target.value !== pkg.description && void updatePackage(pkg, { description: event.target.value })}
+            />
+            <label className="inline-check">
+              <input type="checkbox" checked={pkg.enabled} onChange={(event) => void updatePackage(pkg, { enabled: event.target.checked })} />
+              aktiv
+            </label>
+            <strong>{pkg.channelIds.length} Sender</strong>
+          </div>
+          <div className="channel-picker">
+            {channels.map((channel) => (
+              <label className="channel-check" key={channel.id}>
+                <input
+                  type="checkbox"
+                  checked={pkg.channelIds.includes(channel.id)}
+                  onChange={() => void toggleChannel(pkg, channel.id)}
+                />
+                <span>{channel.number} - {channel.name}</span>
+              </label>
+            ))}
+          </div>
+        </article>
+      ))}
+    </section>
   );
 }
 
@@ -274,16 +343,12 @@ function StreamsView({ streams }: { streams: StreamSession[] }) {
 function WebPlayerView({ channels }: { channels: Channel[] }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<ReturnType<typeof mpegts.createPlayer> | null>(null);
-  const [activationCode, setActivationCode] = useState('');
-  const [deviceId, setDeviceId] = useState(() => window.localStorage.getItem('streamgateWebDeviceId') ?? '');
-  const [deviceToken, setDeviceToken] = useState(() => window.localStorage.getItem('streamgateWebDeviceToken') ?? '');
   const [selectedChannelId, setSelectedChannelId] = useState(() => channels[0]?.id ?? '');
   const [quality, setQuality] = useState<'hd' | 'sd-480p'>(() => (window.localStorage.getItem('streamgateWebQuality') === 'sd-480p' ? 'sd-480p' : 'hd'));
   const [activeStream, setActiveStream] = useState<StreamOpenResult | null>(null);
   const [muted, setMuted] = useState(false);
   const [starting, setStarting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const rememberedSessionId = () => window.localStorage.getItem('streamgateWebStreamSessionId');
 
   useEffect(() => {
     if (!selectedChannelId && channels[0]) {
@@ -293,26 +358,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
 
   useEffect(() => () => destroyPlayer(playerRef.current), []);
 
-  const activate = async () => {
-    const result = await apiPost<ActivationResult>('/device/activate', {
-      activationCode,
-      deviceName: 'StreamGate Webplayer',
-      deviceType: 'android_tv',
-      appVersion: '0.1.0'
-    });
-    window.localStorage.setItem('streamgateWebDeviceId', result.deviceId);
-    window.localStorage.setItem('streamgateWebDeviceToken', result.deviceToken);
-    setDeviceId(result.deviceId);
-    setDeviceToken(result.deviceToken);
-    setActivationCode('');
-    setMessage('Webplayer aktiviert.');
-  };
-
   const start = async () => {
-    if (!deviceId || !deviceToken) {
-      setMessage('Bitte zuerst mit Aktivierungscode aktivieren.');
-      return;
-    }
     if (!selectedChannelId) {
       setMessage('Bitte einen Sender auswaehlen.');
       return;
@@ -321,16 +367,13 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
     try {
       setStarting(true);
       setMessage('Stream wird vorbereitet...');
-      await closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
       window.localStorage.setItem('streamgateWebQuality', quality);
       const stream = await apiPost<StreamOpenResult>(
-        '/stream/open',
-        { channelId: selectedChannelId, deviceId, quality },
-        { Authorization: `Bearer ${deviceToken}` }
+        '/admin/streams/preview',
+        { channelId: selectedChannelId, quality }
       );
       setActiveStream(stream);
-      window.localStorage.setItem('streamgateWebStreamSessionId', stream.streamSessionId);
-      attachStream(streamUrlForBrowser(stream.url), stream.qualityLabel);
+      attachStream(streamUrlForBrowser(stream.url), stream.qualityLabel, stream.mimeType);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Stream konnte nicht gestartet werden.');
     } finally {
@@ -338,8 +381,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
     }
   };
 
-  const stop = async () => {
-    await closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
+  const stop = () => {
     destroyPlayer(playerRef.current);
     playerRef.current = null;
     if (videoRef.current) {
@@ -348,24 +390,11 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
       videoRef.current.load();
     }
     setActiveStream(null);
-    window.localStorage.removeItem('streamgateWebStreamSessionId');
     setMuted(false);
     setMessage('Stream beendet.');
   };
 
-  const logout = () => {
-    window.localStorage.removeItem('streamgateWebDeviceId');
-    window.localStorage.removeItem('streamgateWebDeviceToken');
-    setDeviceId('');
-    setDeviceToken('');
-    setActiveStream(null);
-    window.localStorage.removeItem('streamgateWebStreamSessionId');
-    setMuted(false);
-    destroyPlayer(playerRef.current);
-    playerRef.current = null;
-  };
-
-  const attachStream = (url: string, qualityLabel: string) => {
+  const attachStream = (url: string, qualityLabel: string, mimeType: string) => {
     const video = videoRef.current;
     if (!video) return;
     destroyPlayer(playerRef.current);
@@ -377,14 +406,13 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
     setMuted(true);
     setMessage(`Stream laedt: ${qualityLabel}. Start erfolgt zunaechst stumm.`);
 
-    if (mpegts.isSupported()) {
+    if (isMpegTs(mimeType) && mpegts.isSupported()) {
       const player = mpegts.createPlayer(
         { type: 'mpegts', isLive: true, url },
         { enableWorker: true, liveBufferLatencyChasing: true }
       );
       playerRef.current = player;
       player.on(mpegts.Events.ERROR, (_type, detail) => {
-        void closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
         setMessage(`Player-Fehler: ${String(detail)}`);
       });
       player.attachMediaElement(video);
@@ -395,8 +423,10 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
       return;
     }
 
-    setMessage('Dieser Browser unterstuetzt MPEG-TS per MediaSource nicht.');
     video.src = url;
+    void video.play()
+      .then(() => setMessage(`Stream laeuft: ${qualityLabel}. Ton ist noch stumm.`))
+      .catch(() => setMessage(`Stream ist geladen (${mimeType}). Bitte Play im Videoplayer oder Ton einschalten druecken.`));
   };
 
   const enableSound = () => {
@@ -418,24 +448,11 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
           playsInline
           onPlaying={() => setMessage(activeStream ? `Stream laeuft: ${activeStream.qualityLabel}${muted ? '. Ton ist noch stumm.' : ''}` : null)}
           onError={() => {
-            void closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
             setMessage('Video konnte nicht abgespielt werden. Bitte Stream neu starten.');
           }}
         />
       </div>
       <aside className="player-controls">
-        <label>
-          Aktivierungscode
-          <div className="inline-control">
-            <input value={activationCode} onChange={(event) => setActivationCode(event.target.value.toUpperCase())} placeholder="AB12-CD34" />
-            <button onClick={() => void activate()}>Aktivieren</button>
-          </div>
-        </label>
-        <div className="device-state">
-          <span>Geraet</span>
-          <strong>{deviceId || 'nicht aktiviert'}</strong>
-          {deviceId ? <button onClick={logout}>Zuruecksetzen</button> : null}
-        </div>
         <label>
           Sender
           <select value={selectedChannelId} onChange={(event) => setSelectedChannelId(event.target.value)}>
@@ -454,23 +471,12 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
         <div className="player-actions">
           <button className="primary" disabled={starting} onClick={() => void start()}>{starting ? 'Startet...' : 'Abspielen'}</button>
           {activeStream && muted ? <button onClick={enableSound}>Ton einschalten</button> : null}
-          <button onClick={() => void stop()}>Stop</button>
+          <button onClick={stop}>Stop</button>
         </div>
         {message ? <div className="notice compact">{message}</div> : null}
       </aside>
     </section>
   );
-}
-
-async function closeRememberedSession(streamSessionId: string | null | undefined) {
-  if (!streamSessionId) return;
-  try {
-    await apiPost('/stream/close', { streamSessionId });
-  } catch {
-    // A missing or already closed session should not block the next start.
-  } finally {
-    window.localStorage.removeItem('streamgateWebStreamSessionId');
-  }
 }
 
 function destroyPlayer(player: { unload: () => void; detachMediaElement: () => void; destroy: () => void } | null) {
@@ -492,6 +498,10 @@ function streamUrlForBrowser(url: string) {
     }
   }
   return url;
+}
+
+function isMpegTs(mimeType: string) {
+  return ['video/mp2t', 'video/mpeg', 'application/octet-stream'].includes(mimeType.toLowerCase());
 }
 
 function ConfigView() {

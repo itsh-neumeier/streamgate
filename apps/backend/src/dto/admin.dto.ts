@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateCustomerDto {
   @IsString()
@@ -82,4 +82,33 @@ export class UpdateChannelDto {
   @IsBoolean()
   @IsOptional()
   dvrAllowed?: boolean;
+}
+
+export class PreviewStreamDto {
+  @IsString()
+  channelId!: string;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['hd', 'sd-480p'])
+  quality?: 'hd' | 'sd-480p';
+}
+
+export class UpdatePackageDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  enabled?: boolean;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  channelIds?: string[];
 }

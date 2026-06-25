@@ -52,6 +52,8 @@ export interface StreamOpenResult {
   mimeType: string;
   quality: 'hd' | 'sd-480p';
   qualityLabel: string;
+  mode?: string;
+  profile?: string;
 }
 
 export interface ChannelPackage {

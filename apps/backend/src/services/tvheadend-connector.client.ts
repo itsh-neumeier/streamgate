@@ -33,6 +33,15 @@ export class TvheadendConnectorClient {
       throw new Error(`TVHeadend connector returned ${response.status}`);
     }
 
-    return response.json() as Promise<{ channelId: string; mimeType: string; ticket: string; expiresIn: number; quality: 'hd' | 'sd-480p'; label: string }>;
+    return response.json() as Promise<{
+      channelId: string;
+      mimeType: string;
+      ticket: string;
+      expiresIn: number;
+      quality: 'hd' | 'sd-480p';
+      label: string;
+      mode?: 'streamgate' | 'tvheadend-profile';
+      profile?: string;
+    }>;
   }
 }

@@ -33,8 +33,8 @@ export class ApiController {
   }
 
   @Get('channels')
-  channels() {
-    return this.streamGate.channels();
+  channels(@Headers('authorization') authorization?: string) {
+    return this.streamGate.channels(authorization);
   }
 
   @Get('channels/favorites')

@@ -8,7 +8,7 @@ Der Stream-Proxy schuetzt interne TVHeadend-URLs und stellt temporaere StreamGat
 2. Backend validiert Kunde, Geraet, Paket und Streamlimit.
 3. Backend erzeugt eine StreamSession und fordert intern ein kurzlebiges Stream-Ticket beim Connector an.
 4. App spielt nur die daraus gebildete Proxy-URL ab.
-5. Der Connector authentifiziert sich serverseitig bei TVHeadend und transcodiert den Stream je nach Qualitaetsprofil.
+5. Der Connector authentifiziert sich serverseitig bei TVHeadend und liefert den Stream je nach Betriebsart aus.
 
 ## Nginx MVP
 
@@ -27,13 +27,22 @@ Connector ist nicht erforderlich.
 
 Fuer Clients gibt es zwei Nutzerprofile:
 
-- `HD`: FFmpeg transcodiert serverseitig nach H.264/AAC in Originalaufloesung.
-- `SD`: FFmpeg transcodiert serverseitig nach H.264/AAC mit 480p Videohoehe.
+- `HD`: Nutzeranzeige `HD`.
+- `SD`: Nutzeranzeige `SD`.
 
-TVHeadend-Streams werden fuer Nutzer nicht als Passthrough ausgeliefert. Die
-Standardumgebung nutzt VAAPI-Hardware-Encoding (`FFMPEG_TRANSCODER=vaapi`) mit
-`/dev/dri/renderD128`. Fuer Hosts ohne VAAPI kann `FFMPEG_TRANSCODER=software`
-gesetzt werden.
+Mit `STREAM_TRANSCODE_MODE=streamgate` transcodiert StreamGate serverseitig nach
+H.264/AAC. Die Standardumgebung nutzt VAAPI-Hardware-Encoding
+(`FFMPEG_TRANSCODER=vaapi`) mit `/dev/dri/renderD128`. Fuer Hosts ohne VAAPI
+kann `FFMPEG_TRANSCODER=software` gesetzt werden.
+
+Mit `STREAM_TRANSCODE_MODE=tvheadend-profile` nutzt StreamGate definierte
+TVHeadend-Streamprofile:
+
+- `TVHEADEND_HD_PROFILE`, z. B. `prd-matroska_h264_transcode`
+- `TVHEADEND_SD_PROFILE`, z. B. `prd-matroska_h264_transcode_sd`
+
+Auch in dieser Betriebsart erhalten Clients keine TVHeadend-URL, sondern nur
+die temporaere StreamGate-Ticket-URL.
 
 ## Manuell mit VLC testen
 

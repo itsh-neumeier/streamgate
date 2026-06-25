@@ -1,4 +1,8 @@
 import playlistParser from 'iptv-playlist-parser';
+import type { ServerResponse } from 'node:http';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import type { ReadableStream } from 'node:stream/web';
 
 export interface ConnectorChannel {
   id: string;
@@ -72,6 +76,28 @@ export function tvheadendStreamRequest(config: TvheadendConfig, channelId: strin
   const { endpoint, headers } = authenticatedEndpoint(config, `/stream/channel/${encodeURIComponent(channelId)}`);
   endpoint.searchParams.set('profile', profile);
   return { endpoint, headers };
+}
+
+export async function pipeTvheadendProfileStream(
+  config: TvheadendConfig,
+  channelId: string,
+  profile: string,
+  signal: AbortSignal,
+  response: ServerResponse,
+  fallbackMimeType = 'video/mp2t'
+) {
+  const { endpoint, headers } = tvheadendStreamRequest(config, channelId, profile);
+  headers.accept = 'video/mp2t, video/x-matroska, application/octet-stream';
+  const upstream = await fetch(endpoint, { headers, signal });
+  if (!upstream.ok || !upstream.body) {
+    throw new Error(`TVHeadend stream profile ${profile} returned HTTP ${upstream.status}`);
+  }
+
+  response.statusCode = 200;
+  response.setHeader('content-type', upstream.headers.get('content-type') ?? fallbackMimeType);
+  response.setHeader('cache-control', 'no-store');
+  response.setHeader('x-accel-buffering', 'no');
+  await pipeline(Readable.fromWeb(upstream.body as ReadableStream<Uint8Array>), response);
 }
 
 export function parseTvheadendPlaylist(content: string, profile: string): ConnectorChannel[] {
