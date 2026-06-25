@@ -161,10 +161,6 @@ app.get('/stream/ticket/:ticket', async (request, response) => {
   response.on('close', () => abortController.abort());
 
   try {
-    response.status(200);
-    response.setHeader('content-type', 'video/mp2t');
-    response.setHeader('cache-control', 'no-store');
-    response.setHeader('x-accel-buffering', 'no');
     await pipeH264Transcode(
       tvheadendConfig,
       {

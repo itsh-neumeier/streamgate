@@ -283,6 +283,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
   const [muted, setMuted] = useState(false);
   const [starting, setStarting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const rememberedSessionId = () => window.localStorage.getItem('streamgateWebStreamSessionId');
 
   useEffect(() => {
     if (!selectedChannelId && channels[0]) {
@@ -320,6 +321,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
     try {
       setStarting(true);
       setMessage('Stream wird vorbereitet...');
+      await closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
       window.localStorage.setItem('streamgateWebQuality', quality);
       const stream = await apiPost<StreamOpenResult>(
         '/stream/open',
@@ -327,6 +329,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
         { Authorization: `Bearer ${deviceToken}` }
       );
       setActiveStream(stream);
+      window.localStorage.setItem('streamgateWebStreamSessionId', stream.streamSessionId);
       attachStream(streamUrlForBrowser(stream.url), stream.qualityLabel);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Stream konnte nicht gestartet werden.');
@@ -336,9 +339,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
   };
 
   const stop = async () => {
-    if (activeStream) {
-      await apiPost('/stream/close', { streamSessionId: activeStream.streamSessionId });
-    }
+    await closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
     destroyPlayer(playerRef.current);
     playerRef.current = null;
     if (videoRef.current) {
@@ -347,6 +348,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
       videoRef.current.load();
     }
     setActiveStream(null);
+    window.localStorage.removeItem('streamgateWebStreamSessionId');
     setMuted(false);
     setMessage('Stream beendet.');
   };
@@ -357,6 +359,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
     setDeviceId('');
     setDeviceToken('');
     setActiveStream(null);
+    window.localStorage.removeItem('streamgateWebStreamSessionId');
     setMuted(false);
     destroyPlayer(playerRef.current);
     playerRef.current = null;
@@ -381,6 +384,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
       );
       playerRef.current = player;
       player.on(mpegts.Events.ERROR, (_type, detail) => {
+        void closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
         setMessage(`Player-Fehler: ${String(detail)}`);
       });
       player.attachMediaElement(video);
@@ -413,7 +417,10 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
           muted={muted}
           playsInline
           onPlaying={() => setMessage(activeStream ? `Stream laeuft: ${activeStream.qualityLabel}${muted ? '. Ton ist noch stumm.' : ''}` : null)}
-          onError={() => setMessage('Video konnte nicht abgespielt werden. Bitte Stream neu starten.')}
+          onError={() => {
+            void closeRememberedSession(activeStream?.streamSessionId ?? rememberedSessionId());
+            setMessage('Video konnte nicht abgespielt werden. Bitte Stream neu starten.');
+          }}
         />
       </div>
       <aside className="player-controls">
@@ -453,6 +460,17 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
       </aside>
     </section>
   );
+}
+
+async function closeRememberedSession(streamSessionId: string | null | undefined) {
+  if (!streamSessionId) return;
+  try {
+    await apiPost('/stream/close', { streamSessionId });
+  } catch {
+    // A missing or already closed session should not block the next start.
+  } finally {
+    window.localStorage.removeItem('streamgateWebStreamSessionId');
+  }
 }
 
 function destroyPlayer(player: { unload: () => void; detachMediaElement: () => void; destroy: () => void } | null) {
