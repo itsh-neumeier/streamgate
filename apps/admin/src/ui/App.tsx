@@ -327,7 +327,7 @@ function WebPlayerView({ channels }: { channels: Channel[] }) {
         { Authorization: `Bearer ${deviceToken}` }
       );
       setActiveStream(stream);
-      attachStream(stream.url, stream.qualityLabel);
+      attachStream(streamUrlForBrowser(stream.url), stream.qualityLabel);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Stream konnte nicht gestartet werden.');
     } finally {
@@ -460,6 +460,20 @@ function destroyPlayer(player: { unload: () => void; detachMediaElement: () => v
   player.unload();
   player.detachMediaElement();
   player.destroy();
+}
+
+function streamUrlForBrowser(url: string) {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (parsed.pathname.startsWith('/stream/')) {
+      return `${window.location.origin}${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    if (url.startsWith('/stream/')) {
+      return url;
+    }
+  }
+  return url;
 }
 
 function ConfigView() {
