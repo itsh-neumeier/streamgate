@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
-import { ActivateDeviceDto, HeartbeatDto, OpenStreamDto } from '../dto/api.dto';
+import { ActivateDeviceDto, CreateDvrTimerDto, HeartbeatDto, OpenStreamDto } from '../dto/api.dto';
 import {
   CreateActivationCodeDto,
   CreateCustomerDto,
@@ -22,6 +22,9 @@ interface Customer {
   maxDevices: number;
   maxConcurrentStreams: number;
   dvrEnabled: boolean;
+  tvheadendUsername?: string;
+  tvheadendProfile?: string;
+  dvrProfile?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -81,6 +84,34 @@ interface StreamSession {
   url: string;
 }
 
+interface DvrTimer {
+  id: string;
+  customerId: string;
+  deviceId: string;
+  tvheadendTimerId?: string;
+  tvheadendUsername: string;
+  channelId: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  status: 'scheduled' | 'recording' | 'completed' | 'cancelled' | 'error';
+}
+
+interface Recording {
+  id: string;
+  customerId: string;
+  deviceId: string;
+  tvheadendRecordingId?: string;
+  channelId: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+}
+
 @Injectable()
 export class StreamGateService {
   private customers: Customer[] = [
@@ -92,6 +123,9 @@ export class StreamGateService {
       maxDevices: 3,
       maxConcurrentStreams: 2,
       dvrEnabled: true,
+      tvheadendUsername: 'sg_cust_123',
+      tvheadendProfile: 'pass',
+      dvrProfile: 'default',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -163,6 +197,8 @@ export class StreamGateService {
   ];
 
   private streamSessions: StreamSession[] = [];
+  private dvrTimers: DvrTimer[] = [];
+  private recordingsData: Recording[] = [];
   private audit: Array<Record<string, unknown>> = [];
 
   constructor(private readonly connector: TvheadendConnectorClient) {}
@@ -392,19 +428,87 @@ export class StreamGateService {
     return session;
   }
 
-  recordings() {
-    return { recordings: [] };
+  recordings(authorization?: string) {
+    const device = this.requireAuthorizedDevice(authorization);
+    return { recordings: this.recordingsData.filter((recording) => recording.customerId === device.customerId) };
   }
 
-  timers() {
-    return { timers: [] };
+  timers(authorization?: string) {
+    const device = this.requireAuthorizedDevice(authorization);
+    return { timers: this.dvrTimers.filter((timer) => timer.customerId === device.customerId && timer.status !== 'cancelled') };
   }
 
-  createTimer(body: Record<string, unknown>) {
-    return { id: this.id('timer'), status: 'scheduled', ...body };
+  async createTimer(dto: CreateDvrTimerDto, authorization?: string) {
+    await this.refreshChannels();
+    const device = this.requireAuthorizedDevice(authorization);
+    const customer = this.mustCustomer(device.customerId);
+    if (!customer.dvrEnabled) {
+      throw new UnauthorizedException('DVR ist fuer diesen Kunden nicht aktiviert.');
+    }
+    const channel = this.channelsData.find((item) => item.id === dto.channelId && item.enabled);
+    if (!channel) {
+      throw new NotFoundException('Sender nicht gefunden.');
+    }
+    if (!channel.dvrAllowed) {
+      throw new BadRequestException('Aufnahmen sind fuer diesen Sender nicht erlaubt.');
+    }
+    const customerPackage = this.packagesData.find((item) => item.id === customer.packageId && item.enabled);
+    if (!customerPackage || !customerPackage.channelIds.includes(channel.id)) {
+      throw new UnauthorizedException('Sender ist nicht im Kundenpaket enthalten.');
+    }
+    const startTime = new Date(dto.startTime);
+    const endTime = new Date(dto.endTime);
+    if (!Number.isFinite(startTime.getTime()) || !Number.isFinite(endTime.getTime()) || endTime <= startTime) {
+      throw new BadRequestException('Aufnahmezeitraum ist ungueltig.');
+    }
+    const overlapping = this.dvrTimers.some((timer) => (
+      timer.customerId === customer.id
+      && ['scheduled', 'recording'].includes(timer.status)
+      && this.timeRangesOverlap(startTime, endTime, new Date(timer.startTime), new Date(timer.endTime))
+    ));
+    if (overlapping) {
+      throw new BadRequestException('Es ist bereits eine Aufnahme in diesem Zeitraum geplant.');
+    }
+
+    const tvheadendUsername = customer.tvheadendUsername ?? `sg_${customer.id}`;
+    const connectorTimer = await this.connector.createTimer({
+      customerId: customer.id,
+      tvheadendUsername,
+      tvheadendProfile: customer.tvheadendProfile ?? 'pass',
+      dvrProfile: customer.dvrProfile ?? 'default',
+      channelId: channel.tvheadendChannelUuid,
+      title: dto.title,
+      description: dto.description,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString()
+    });
+    const timer: DvrTimer = {
+      id: this.id('timer'),
+      customerId: customer.id,
+      deviceId: device.id,
+      tvheadendTimerId: connectorTimer.id,
+      tvheadendUsername,
+      channelId: channel.id,
+      title: dto.title,
+      description: dto.description,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      status: 'scheduled'
+    };
+    this.dvrTimers.push(timer);
+    return timer;
   }
 
-  deleteTimer(id: string) {
+  async deleteTimer(id: string, authorization?: string) {
+    const device = this.requireAuthorizedDevice(authorization);
+    const timer = this.dvrTimers.find((item) => item.id === id && item.customerId === device.customerId);
+    if (!timer) {
+      throw new NotFoundException('DVR-Timer nicht gefunden.');
+    }
+    timer.status = 'cancelled';
+    if (timer.tvheadendTimerId) {
+      await this.connector.deleteTimer(timer.tvheadendTimerId);
+    }
     return { ok: true, id };
   }
 
@@ -445,7 +549,17 @@ export class StreamGateService {
     if (dto.packageId && !this.packagesData.some((pkg) => pkg.id === dto.packageId)) {
       throw new NotFoundException('Paket nicht gefunden.');
     }
-    Object.assign(customer, dto, { updatedAt: new Date().toISOString() });
+    const normalized: UpdateCustomerDto = { ...dto };
+    if ('tvheadendUsername' in dto) {
+      normalized.tvheadendUsername = dto.tvheadendUsername?.trim() || undefined;
+    }
+    if ('tvheadendProfile' in dto) {
+      normalized.tvheadendProfile = dto.tvheadendProfile?.trim() || undefined;
+    }
+    if ('dvrProfile' in dto) {
+      normalized.dvrProfile = dto.dvrProfile?.trim() || undefined;
+    }
+    Object.assign(customer, normalized, { updatedAt: new Date().toISOString() });
     return customer;
   }
 
@@ -668,6 +782,21 @@ export class StreamGateService {
     return device;
   }
 
+  private requireAuthorizedDevice(authorization?: string) {
+    const device = this.deviceFromToken(authorization);
+    if (!device) {
+      throw new UnauthorizedException('Device Token ist ungueltig oder fehlt.');
+    }
+    if (device.status !== 'active') {
+      throw new UnauthorizedException('Geraet ist nicht aktiv.');
+    }
+    const customer = this.mustCustomer(device.customerId);
+    if (customer.status !== 'active') {
+      throw new UnauthorizedException('Kunde ist nicht aktiv.');
+    }
+    return device;
+  }
+
   private mustCustomer(id: string) {
     const customer = this.customers.find((item) => item.id === id);
     if (!customer) {
@@ -702,6 +831,10 @@ export class StreamGateService {
 
   private normalizeQuality(value?: string): 'hd' | 'sd-480p' {
     return value === 'sd-480p' ? 'sd-480p' : 'hd';
+  }
+
+  private timeRangesOverlap(leftStart: Date, leftEnd: Date, rightStart: Date, rightEnd: Date) {
+    return leftStart < rightEnd && rightStart < leftEnd;
   }
 
   private activationCode() {

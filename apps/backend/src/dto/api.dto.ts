@@ -66,3 +66,21 @@ export class UpdateFavoritesDto {
   @IsString({ each: true })
   channelIds!: string[];
 }
+
+export class CreateDvrTimerDto {
+  @IsString()
+  channelId!: string;
+
+  @IsString()
+  title!: string;
+
+  @IsString()
+  startTime!: string;
+
+  @IsString()
+  endTime!: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+}

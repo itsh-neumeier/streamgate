@@ -64,6 +64,15 @@ nicht an Clients weitergegeben. Wenn TVHeadend Matroska ausgibt
 aber je nach Codec/Container nicht verlaesslich. Fuer den Admin-Webplayer sind
 MPEG-TS (`video/mp2t`) oder HLS die robusteren Ausgabeformen.
 
+## DVR-User
+
+Pro Kunde kann im Adminbereich ein `tvheadendUsername`, ein `tvheadendProfile`
+und ein `dvrProfile` hinterlegt werden. StreamGate nutzt diese Werte beim
+Anlegen von DVR-Timern und gibt sie nicht an Clients aus. Im MVP speichert
+StreamGate Timer intern und ruft den Connector mit den normalisierten
+TVHeadend-Daten auf; spaeter kann der Connector diese Daten auf konkrete
+TVHeadend-DVR-API-Aufrufe abbilden.
+
 ## Mock-Modus
 
 Im Mock-Modus gibt der Connector deterministische Beispielkanaele, EPG-Daten, leere DVR-Listen und HLS-Teststreams zurueck. Dadurch sind Backend, Admin und Android-TV-App ohne TVHeadend testbar.

@@ -58,6 +58,19 @@ services:
       - streamgate
     restart: unless-stopped
 
+  streamgate-web:
+    image: ghcr.io/itsh-neumeier/streamgate-web:${STREAMGATE_TAG:-latest}
+    ports:
+      - "${WEB_PORT:-8081}:80"
+    depends_on:
+      streamgate-backend:
+        condition: service_started
+      streamgate-tvheadend-connector:
+        condition: service_started
+    networks:
+      - streamgate
+    restart: unless-stopped
+
   streamgate-tvheadend-connector:
     image: ghcr.io/itsh-neumeier/streamgate-tvheadend-connector:${STREAMGATE_TAG:-latest}
     environment:

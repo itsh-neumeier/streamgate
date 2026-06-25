@@ -1,8 +1,12 @@
-name: Release Containers
+name: Web Container
 
 on:
   push:
+    branches: [main]
     tags: ["v*.*.*"]
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/web-container.yml"
   workflow_dispatch:
 
 permissions:
@@ -12,20 +16,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: ghcr.io/itsh-neumeier/streamgate-backend
-            dockerfile: apps/backend/Dockerfile
-          - image: ghcr.io/itsh-neumeier/streamgate-admin
-            dockerfile: apps/admin/Dockerfile
-          - image: ghcr.io/itsh-neumeier/streamgate-web
-            dockerfile: apps/web/Dockerfile
-          - image: ghcr.io/itsh-neumeier/streamgate-proxy
-            dockerfile: services/proxy/Dockerfile
-          - image: ghcr.io/itsh-neumeier/streamgate-tvheadend-connector
-            dockerfile: services/tvheadend-connector/Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -37,15 +27,16 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ matrix.image }}
+          images: ghcr.io/itsh-neumeier/streamgate-web
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=main,enable={{is_default_branch}}
             type=sha,format=short
             type=semver,pattern={{version}}
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: apps/web/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

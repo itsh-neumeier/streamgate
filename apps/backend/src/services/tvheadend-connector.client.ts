@@ -44,4 +44,36 @@ export class TvheadendConnectorClient {
       profile?: string;
     }>;
   }
+
+  async createTimer(body: {
+    customerId: string;
+    tvheadendUsername: string;
+    tvheadendProfile: string;
+    dvrProfile: string;
+    channelId: string;
+    title: string;
+    description?: string;
+    startTime: string;
+    endTime: string;
+  }) {
+    const response = await fetch(`${this.baseUrl}/dvr/timers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      throw new Error(`TVHeadend connector DVR timer request returned ${response.status}`);
+    }
+
+    return response.json() as Promise<{ id: string; status: string }>;
+  }
+
+  async deleteTimer(id: string) {
+    const response = await fetch(`${this.baseUrl}/dvr/timers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) {
+      throw new Error(`TVHeadend connector DVR timer delete returned ${response.status}`);
+    }
+    return response.json() as Promise<{ ok: boolean; id: string }>;
+  }
 }

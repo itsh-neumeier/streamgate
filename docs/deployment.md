@@ -12,6 +12,12 @@ docker compose -f deploy/docker-compose.yml up --build
 docker compose -f deploy/docker-compose.prod.yml up -d
 ```
 
+Standardports in der Portainer-Stack-Datei:
+
+- Admin: `ADMIN_PORT=8080`
+- Kunden-Webapp: `WEB_PORT=8081`
+- Stream-Proxy: `PROXY_PORT=8088`
+
 ## Healthchecks
 
 - Backend: `GET /health`

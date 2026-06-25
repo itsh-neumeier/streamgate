@@ -98,6 +98,23 @@ Im Mock-Modus erzeugt StreamGate HLS-Test-URLs ueber den Proxy, ohne TVHeadend z
 - `DELETE /api/dvr/timers/:id`
 - `DELETE /api/dvr/recordings/:id`
 
+Alle DVR-Endpoints fuer Kunden erwarten ein Device Token. `POST /api/dvr/timers`
+legt einen Timer fuer den Kunden an:
+
+```json
+{
+  "channelId": "ard-hd",
+  "title": "Tagesschau",
+  "startTime": "2026-06-25T20:00:00.000Z",
+  "endTime": "2026-06-25T20:15:00.000Z",
+  "description": "optional"
+}
+```
+
+StreamGate blockiert ueberlappende geplante Aufnahmen pro Kunde, damit nicht
+zwei Aufnahmen gleichzeitig laufen. Der fuer TVHeadend verwendete Aufnahmeuser
+wird in der Admin-Kundenverwaltung gepflegt.
+
 ## Admin
 
 - `GET /admin/customers`
@@ -121,3 +138,6 @@ Im Mock-Modus erzeugt StreamGate HLS-Test-URLs ueber den Proxy, ohne TVHeadend z
 `POST /admin/streams/preview` startet einen Admin-Teststream ohne
 Aktivierungscode, Device Token und Kunden-Streamlimit. Der Endpoint ist fuer den
 Admin-Webplayer gedacht und erzeugt keine normale `StreamSession`.
+
+`PUT /admin/customers/:id` akzeptiert neben Kundenstatus, Paket und Limits auch
+`tvheadendUsername`, `tvheadendProfile` und `dvrProfile`.

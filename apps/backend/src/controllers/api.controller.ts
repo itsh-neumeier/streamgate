@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { ActivateDeviceDto, HeartbeatDto, OpenStreamDto, CloseStreamDto, UpdateFavoritesDto } from '../dto/api.dto';
+import { ActivateDeviceDto, CloseStreamDto, CreateDvrTimerDto, HeartbeatDto, OpenStreamDto, UpdateFavoritesDto } from '../dto/api.dto';
 import { StreamGateService } from '../services/streamgate.service';
 
 @Controller('api')
@@ -78,23 +78,23 @@ export class ApiController {
   }
 
   @Get('dvr/recordings')
-  recordings() {
-    return this.streamGate.recordings();
+  recordings(@Headers('authorization') authorization?: string) {
+    return this.streamGate.recordings(authorization);
   }
 
   @Get('dvr/timers')
-  timers() {
-    return this.streamGate.timers();
+  timers(@Headers('authorization') authorization?: string) {
+    return this.streamGate.timers(authorization);
   }
 
   @Post('dvr/timers')
-  createTimer(@Body() body: Record<string, unknown>) {
-    return this.streamGate.createTimer(body);
+  createTimer(@Body() dto: CreateDvrTimerDto, @Headers('authorization') authorization?: string) {
+    return this.streamGate.createTimer(dto, authorization);
   }
 
   @Delete('dvr/timers/:id')
-  deleteTimer(@Param('id') id: string) {
-    return this.streamGate.deleteTimer(id);
+  deleteTimer(@Param('id') id: string, @Headers('authorization') authorization?: string) {
+    return this.streamGate.deleteTimer(id, authorization);
   }
 
   @Delete('dvr/recordings/:id')

@@ -6,6 +6,7 @@ StreamGate ist eine leichtgewichtige White-Label-TV-Plattform fuer Android-TV-St
 
 - `apps/backend`: NestJS Middleman-API mit Device Activation, Bootstrap, Sendern, Streams, Heartbeat und Admin-API.
 - `apps/admin`: React/Vite Admin-Oberflaeche fuer Kunden, Geraete, Sender, Pakete, Streams, Webplayer und Branding.
+- `apps/web`: React/Vite Kunden-Webapp mit Aktivierungscode, Live-TV-Webplayer und DVR-Planung.
 - `apps/android-tv`: Kotlin Android-TV-App-Grundgeruest mit Aktivierung, Live-TV und Zapping-Debounce.
 - `services/tvheadend-connector`: serverseitiger TVHeadend-Adapter mit Mock-Modus und FFmpeg H.264-Transcoding.
 - `services/proxy`: Nginx-basierter API- und Stream-Proxy fuer temporaere Stream-URLs.
@@ -22,6 +23,7 @@ Wichtige lokale URLs:
 
 - Backend: `http://localhost:3000`
 - Admin: `http://localhost:8080`
+- Kunden-Webapp: `http://localhost:8081`
 - Proxy: `http://localhost:8088`
 - TVHeadend-Connector: `http://localhost:3100`
 - PostgreSQL: `localhost:5432`
@@ -49,6 +51,20 @@ Admin-Preview-Endpunkt gestartet und braucht keinen Aktivierungscode, kein
 Device Token und kein Kunden-Streamlimit. Der Browser sieht keine TVHeadend-URL
 und keine Credentials.
 
+## Kunden-Webapp
+
+Die Kunden-Webapp laeuft als eigener Container `streamgate-web` und ist in
+Portainer standardmaessig ueber `WEB_PORT=8081` erreichbar. Sie nutzt denselben
+Aktivierungscode-Flow wie Android-TV, speichert ein Device Token lokal im
+Browser und ruft Live-TV, Senderliste, Bootstrap und DVR ausschliesslich ueber
+StreamGate ab.
+
+DVR-Timer werden nur angelegt, wenn DVR fuer den Kunden aktiv ist, der Sender im
+Kundenpaket liegt und der Sender Aufnahmen erlaubt. Pro Kunde darf zu einem
+Zeitpunkt nur eine Aufnahme geplant sein. Der TVHeadend-Aufnahmeuser wird in der
+Admin-Kundenverwaltung ueber `TVH User`, `TVH Profil` und `DVR Profil`
+festgelegt.
+
 ## Transcoding
 
 Bei realem TVHeadend-Betrieb liefert StreamGate fuer Nutzer keine
@@ -73,6 +89,7 @@ Die GitHub Actions bauen und veroeffentlichen folgende Images:
 
 - `ghcr.io/itsh-neumeier/streamgate-backend`
 - `ghcr.io/itsh-neumeier/streamgate-admin`
+- `ghcr.io/itsh-neumeier/streamgate-web`
 - `ghcr.io/itsh-neumeier/streamgate-proxy`
 - `ghcr.io/itsh-neumeier/streamgate-tvheadend-connector`
 

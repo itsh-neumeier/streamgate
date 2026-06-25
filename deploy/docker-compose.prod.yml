@@ -16,6 +16,15 @@ services:
     image: ghcr.io/itsh-neumeier/streamgate-admin:latest
     restart: unless-stopped
 
+  streamgate-web:
+    image: ghcr.io/itsh-neumeier/streamgate-web:latest
+    ports:
+      - "${WEB_PORT:-8081}:80"
+    depends_on:
+      - streamgate-backend
+      - streamgate-tvheadend-connector
+    restart: unless-stopped
+
   streamgate-tvheadend-connector:
     image: ghcr.io/itsh-neumeier/streamgate-tvheadend-connector:latest
     env_file: ../.env

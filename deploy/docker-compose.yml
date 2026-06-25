@@ -31,6 +31,17 @@ services:
     depends_on:
       - streamgate-backend
 
+  streamgate-web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: streamgate-web
+    ports:
+      - "8081:80"
+    depends_on:
+      - streamgate-backend
+      - streamgate-tvheadend-connector
+
   streamgate-tvheadend-connector:
     build:
       context: ..

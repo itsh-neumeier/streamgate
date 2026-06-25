@@ -35,6 +35,18 @@ export class UpdateCustomerDto {
   @IsBoolean()
   @IsOptional()
   dvrEnabled?: boolean;
+
+  @IsString()
+  @IsOptional()
+  tvheadendUsername?: string;
+
+  @IsString()
+  @IsOptional()
+  tvheadendProfile?: string;
+
+  @IsString()
+  @IsOptional()
+  dvrProfile?: string;
 }
 
 export class CreateActivationCodeDto {

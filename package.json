@@ -5,6 +5,7 @@
   "workspaces": [
     "apps/backend",
     "apps/admin",
+    "apps/web",
     "services/tvheadend-connector",
     "packages/shared"
   ],

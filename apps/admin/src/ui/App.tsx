@@ -139,7 +139,7 @@ function CustomersView({ customers, packages, onRefresh }: { customers: Customer
     <DataSection action={<button onClick={() => void createCustomer()}>Kunde anlegen</button>}>
       <table>
         <thead>
-          <tr><th>Name</th><th>Status</th><th>Paket</th><th>Geraete</th><th>Streams</th><th>DVR</th><th /></tr>
+          <tr><th>Name</th><th>Status</th><th>Paket</th><th>Geraete</th><th>Streams</th><th>DVR</th><th>TVH User</th><th>TVH Profil</th><th>DVR Profil</th><th /></tr>
         </thead>
         <tbody>
           {customers.map((customer) => (
@@ -182,6 +182,28 @@ function CustomersView({ customers, packages, onRefresh }: { customers: Customer
                 />
               </td>
               <td><input type="checkbox" checked={customer.dvrEnabled} onChange={(event) => void updateCustomer(customer, { dvrEnabled: event.target.checked })} /></td>
+              <td>
+                <input
+                  className="table-input"
+                  defaultValue={customer.tvheadendUsername ?? ''}
+                  placeholder={`sg_${customer.id}`}
+                  onBlur={(event) => event.target.value !== (customer.tvheadendUsername ?? '') && void updateCustomer(customer, { tvheadendUsername: event.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="table-input"
+                  defaultValue={customer.tvheadendProfile ?? 'pass'}
+                  onBlur={(event) => event.target.value !== (customer.tvheadendProfile ?? 'pass') && void updateCustomer(customer, { tvheadendProfile: event.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="table-input"
+                  defaultValue={customer.dvrProfile ?? 'default'}
+                  onBlur={(event) => event.target.value !== (customer.dvrProfile ?? 'default') && void updateCustomer(customer, { dvrProfile: event.target.value })}
+                />
+              </td>
               <td><button onClick={() => void createCode(customer.id)}>Code</button></td>
             </tr>
           ))}
