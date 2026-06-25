@@ -40,14 +40,22 @@ class ApiClient(
         return parseChannels(array)
     }
 
-    fun openStream(channelId: String): StreamOpenResult {
+    fun openStream(channelId: String, quality: String): StreamOpenResult {
         val deviceId = tokenStorage.deviceId() ?: error("Device is not activated")
-        val json = postJson("/api/stream/open", JSONObject().put("channelId", channelId).put("deviceId", deviceId))
+        val json = postJson(
+            "/api/stream/open",
+            JSONObject()
+                .put("channelId", channelId)
+                .put("deviceId", deviceId)
+                .put("quality", quality)
+        )
         return StreamOpenResult(
             json.getString("streamSessionId"),
             json.getString("url"),
             json.optInt("expiresIn", 60),
-            json.optString("mimeType", "application/x-mpegURL")
+            json.optString("mimeType", "application/x-mpegURL"),
+            json.optString("quality", quality),
+            json.optString("qualityLabel", if (quality == "sd-480p") "SD" else "HD")
         )
     }
 
@@ -69,12 +77,21 @@ class ApiClient(
         val ui = json.getJSONObject("ui")
         val branding = json.getJSONObject("branding")
         val features = json.getJSONObject("features")
+        val profiles = json.optJSONArray("streamProfiles")
         return BootstrapConfig(
             appName = branding.optString("appName", "StreamGate TV"),
             startScreen = ui.optString("startScreen", "live_tv"),
             startChannel = ui.optString("startChannel", "ard-hd"),
             primaryColor = branding.optString("primaryColor", "#0066cc"),
-            dvrEnabled = features.optBoolean("dvr", false)
+            dvrEnabled = features.optBoolean("dvr", false),
+            streamProfiles = if (profiles != null) {
+                (0 until profiles.length()).map { index ->
+                    val item = profiles.getJSONObject(index)
+                    StreamQualityOption(item.optString("id", "hd"), item.optString("label", "HD"))
+                }
+            } else {
+                listOf(StreamQualityOption("hd", "HD"), StreamQualityOption("sd-480p", "SD"))
+            }
         )
     }
 

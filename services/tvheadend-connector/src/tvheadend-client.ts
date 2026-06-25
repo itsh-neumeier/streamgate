@@ -68,11 +68,10 @@ export async function fetchTvheadendPlaylistChannels(config: TvheadendConfig): P
   return parseTvheadendPlaylist(await response.text(), config.profile);
 }
 
-export async function openTvheadendStream(config: TvheadendConfig, channelId: string, profile: string, signal: AbortSignal) {
+export function tvheadendStreamRequest(config: TvheadendConfig, channelId: string, profile: string) {
   const { endpoint, headers } = authenticatedEndpoint(config, `/stream/channel/${encodeURIComponent(channelId)}`);
   endpoint.searchParams.set('profile', profile);
-  headers.accept = 'video/mp2t, application/octet-stream';
-  return fetch(endpoint, { headers, signal });
+  return { endpoint, headers };
 }
 
 export function parseTvheadendPlaylist(content: string, profile: string): ConnectorChannel[] {

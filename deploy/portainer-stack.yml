@@ -11,6 +11,10 @@
 # TVHEADEND_BASE_URL=http://tvheadend:9981
 # TVHEADEND_USERNAME=replace-me
 # TVHEADEND_PASSWORD=replace-me
+# FFMPEG_TRANSCODER=vaapi
+# VAAPI_DEVICE=/dev/dri/renderD128
+# HD_VIDEO_BITRATE=5500k
+# SD_VIDEO_BITRATE=1400k
 
 services:
   streamgate-backend:
@@ -58,6 +62,18 @@ services:
       TVHEADEND_USERNAME: ${TVHEADEND_USERNAME:-replace-me}
       TVHEADEND_PASSWORD: ${TVHEADEND_PASSWORD:-replace-me}
       TVHEADEND_DEFAULT_PROFILE: ${TVHEADEND_DEFAULT_PROFILE:-pass}
+      FFMPEG_TRANSCODER: ${FFMPEG_TRANSCODER:-vaapi}
+      FFMPEG_LOG_LEVEL: ${FFMPEG_LOG_LEVEL:-warning}
+      VAAPI_DEVICE: ${VAAPI_DEVICE:-/dev/dri/renderD128}
+      HD_VIDEO_BITRATE: ${HD_VIDEO_BITRATE:-5500k}
+      HD_VIDEO_MAXRATE: ${HD_VIDEO_MAXRATE:-7000k}
+      HD_VIDEO_BUFSIZE: ${HD_VIDEO_BUFSIZE:-11000k}
+      SD_VIDEO_BITRATE: ${SD_VIDEO_BITRATE:-1400k}
+      SD_VIDEO_MAXRATE: ${SD_VIDEO_MAXRATE:-1800k}
+      SD_VIDEO_BUFSIZE: ${SD_VIDEO_BUFSIZE:-2800k}
+      SD_AUDIO_BITRATE: ${SD_AUDIO_BITRATE:-128k}
+    devices:
+      - ${VAAPI_RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
     networks:
       - streamgate
     restart: unless-stopped

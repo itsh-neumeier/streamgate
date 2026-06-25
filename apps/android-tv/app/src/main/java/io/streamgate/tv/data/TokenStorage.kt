@@ -17,6 +17,12 @@ class TokenStorage(context: Context) {
 
     fun deviceToken(): String? = prefs.getString("deviceToken", null)
 
+    fun streamQuality(): String = prefs.getString("streamQuality", "hd") ?: "hd"
+
+    fun saveStreamQuality(quality: String) {
+        prefs.edit().putString("streamQuality", quality).apply()
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
     }

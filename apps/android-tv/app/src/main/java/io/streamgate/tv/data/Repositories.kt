@@ -5,7 +5,7 @@ class ChannelRepository(private val apiClient: ApiClient) {
 }
 
 class StreamRepository(private val apiClient: ApiClient) {
-    fun open(channelId: String): StreamOpenResult = apiClient.openStream(channelId)
+    fun open(channelId: String, quality: String): StreamOpenResult = apiClient.openStream(channelId, quality)
 }
 
 class EpgRepository {

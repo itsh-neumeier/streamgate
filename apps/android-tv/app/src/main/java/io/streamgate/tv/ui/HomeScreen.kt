@@ -22,7 +22,7 @@ fun HomeScreen(state: StreamGateUiState, model: StreamGateViewModel) {
             onOk = model::toggleChannelList,
             onBack = model::closeOverlays,
             onGuide = model::toggleMiniGuide,
-            onMenu = model::toggleChannelList
+            onMenu = model::toggleQualityMenu
         )
     }
 

@@ -15,7 +15,16 @@ data class BootstrapConfig(
     val startScreen: String,
     val startChannel: String,
     val primaryColor: String,
-    val dvrEnabled: Boolean
+    val dvrEnabled: Boolean,
+    val streamProfiles: List<StreamQualityOption> = listOf(
+        StreamQualityOption("hd", "HD"),
+        StreamQualityOption("sd-480p", "SD")
+    )
+)
+
+data class StreamQualityOption(
+    val id: String,
+    val label: String
 )
 
 data class ActivationResult(
@@ -28,5 +37,7 @@ data class StreamOpenResult(
     val streamSessionId: String,
     val url: String,
     val expiresIn: Int,
-    val mimeType: String
+    val mimeType: String,
+    val quality: String,
+    val qualityLabel: String
 )

@@ -32,6 +32,7 @@ Schliesst aktive Sessions des Geraets.
 ### GET /api/app/bootstrap
 
 Liefert Kunde, Geraet, UI, Feature Flags, Limits und Branding.
+`streamProfiles` enthaelt die Nutzerqualitaeten `HD` und `SD`.
 
 ## Channels
 
@@ -45,6 +46,34 @@ Liefert Kunde, Geraet, UI, Feature Flags, Limits und Branding.
 - `POST /api/stream/open`
 - `POST /api/stream/close`
 - `GET /api/stream/session/:id`
+
+`POST /api/stream/open` akzeptiert optional `quality`:
+
+```json
+{
+  "channelId": "ard-hd",
+  "deviceId": "dev_abc123",
+  "quality": "hd"
+}
+```
+
+Moegliche Werte:
+
+- `hd`: Nutzeranzeige `HD`, serverseitiges H.264/AAC-Transcoding in Originalaufloesung.
+- `sd-480p`: Nutzeranzeige `SD`, serverseitiges H.264/AAC-Transcoding auf 480p.
+
+Antwort:
+
+```json
+{
+  "streamSessionId": "str_987",
+  "url": "https://tv.example.local/stream/ticket/opaque-ticket",
+  "expiresIn": 60,
+  "mimeType": "video/mp2t",
+  "quality": "hd",
+  "qualityLabel": "HD"
+}
+```
 
 Im Mock-Modus erzeugt StreamGate HLS-Test-URLs ueber den Proxy, ohne TVHeadend zu kontaktieren.
 

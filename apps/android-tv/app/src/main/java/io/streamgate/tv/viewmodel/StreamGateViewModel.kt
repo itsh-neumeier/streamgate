@@ -23,9 +23,11 @@ data class StreamGateUiState(
     val bootstrap: BootstrapConfig? = null,
     val channels: List<Channel> = emptyList(),
     val selectedIndex: Int = 0,
+    val selectedQuality: String = "hd",
     val activeStream: StreamOpenResult? = null,
     val showChannelList: Boolean = false,
-    val showMiniGuide: Boolean = false
+    val showMiniGuide: Boolean = false,
+    val showQualityMenu: Boolean = false
 )
 
 class StreamGateViewModel(
@@ -51,7 +53,14 @@ class StreamGateViewModel(
                 val bootstrap = apiClient.bootstrap()
                 val channels = apiClient.channels()
                 val startIndex = channels.indexOfFirst { it.id == bootstrap.startChannel }.coerceAtLeast(0)
-                _state.value = StreamGateUiState(activated = true, loading = false, bootstrap = bootstrap, channels = channels, selectedIndex = startIndex)
+                _state.value = StreamGateUiState(
+                    activated = true,
+                    loading = false,
+                    bootstrap = bootstrap,
+                    channels = channels,
+                    selectedIndex = startIndex,
+                    selectedQuality = normalizeQuality(tokenStorage.streamQuality())
+                )
                 openSelectedStream()
             }.onFailure {
                 val cached = apiClient.cachedBootstrap()
@@ -78,19 +87,30 @@ class StreamGateViewModel(
     fun previousChannel() = moveSelection(-1)
 
     fun toggleChannelList() {
-        _state.value = _state.value.copy(showChannelList = !_state.value.showChannelList, showMiniGuide = false)
+        _state.value = _state.value.copy(showChannelList = !_state.value.showChannelList, showMiniGuide = false, showQualityMenu = false)
     }
 
     fun toggleMiniGuide() {
-        _state.value = _state.value.copy(showMiniGuide = !_state.value.showMiniGuide, showChannelList = false)
+        _state.value = _state.value.copy(showMiniGuide = !_state.value.showMiniGuide, showChannelList = false, showQualityMenu = false)
+    }
+
+    fun toggleQualityMenu() {
+        _state.value = _state.value.copy(showQualityMenu = !_state.value.showQualityMenu, showChannelList = false, showMiniGuide = false)
     }
 
     fun closeOverlays() {
-        _state.value = _state.value.copy(showChannelList = false, showMiniGuide = false)
+        _state.value = _state.value.copy(showChannelList = false, showMiniGuide = false, showQualityMenu = false)
     }
 
     fun selectChannel(index: Int) {
         _state.value = _state.value.copy(selectedIndex = index, showChannelList = false)
+        scheduleZap()
+    }
+
+    fun setQuality(quality: String) {
+        val normalized = normalizeQuality(quality)
+        tokenStorage.saveStreamQuality(normalized)
+        _state.value = _state.value.copy(selectedQuality = normalized, showQualityMenu = false)
         scheduleZap()
     }
 
@@ -114,13 +134,15 @@ class StreamGateViewModel(
         val current = _state.value
         val channel = current.channels.getOrNull(current.selectedIndex) ?: return
         runCatching {
-            val stream = apiClient.openStream(channel.id)
+            val stream = apiClient.openStream(channel.id, current.selectedQuality)
             apiClient.heartbeat(channel.id, "live_tv", "playing")
             _state.value = _state.value.copy(activeStream = stream, error = null)
         }.onFailure {
             _state.value = _state.value.copy(error = "Stream konnte nicht gestartet werden.")
         }
     }
+
+    private fun normalizeQuality(quality: String): String = if (quality == "sd-480p") "sd-480p" else "hd"
 }
 
 class StreamGateViewModelFactory(

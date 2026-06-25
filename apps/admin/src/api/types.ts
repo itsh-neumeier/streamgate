@@ -39,6 +39,21 @@ export interface Channel {
   favorite: boolean;
 }
 
+export interface ActivationResult {
+  deviceId: string;
+  deviceToken: string;
+  customerId: string;
+}
+
+export interface StreamOpenResult {
+  streamSessionId: string;
+  url: string;
+  expiresIn: number;
+  mimeType: string;
+  quality: 'hd' | 'sd-480p';
+  qualityLabel: string;
+}
+
 export interface ChannelPackage {
   id: string;
   name: string;
@@ -52,6 +67,8 @@ export interface StreamSession {
   customerId: string;
   deviceId: string;
   channelId: string;
+  quality?: string;
+  qualityLabel?: string;
   status: string;
   openedAt: string;
 }

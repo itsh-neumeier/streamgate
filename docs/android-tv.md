@@ -28,12 +28,23 @@ Die Android-TV-App ist ein reiner StreamGate-Client. Sie speichert keine TVHeade
 - OK: Senderliste
 - Pfeil links/rechts: Mini-Guide
 - Zurueck: Overlay schliessen oder Home
-- Menue: Hauptmenue
+- Menue: Qualitaetseinstellung `HD`/`SD`
 - Ziffern: direkter Sendernummern-Puffer
 
 ## Zapping
 
 Mehrere Hoch/Runter-Eingaben werden gebuendelt. Erst nach 300 ms ohne weitere Eingabe oeffnet die App den neuen Stream. Waehrenddessen zeigt die UI Sendername und Now/Next aus dem lokalen Cache.
+
+## Qualitaet
+
+Die App zeigt nur die Nutzerwerte `HD` und `SD`.
+
+- `HD`: StreamGate liefert H.264/AAC in Originalaufloesung.
+- `SD`: StreamGate liefert H.264/AAC in 480p.
+
+Die Auswahl wird lokal gespeichert und bei `POST /api/stream/open` als `quality`
+gesendet. TVHeadend-Profile, Credentials und interne Stream-URLs bleiben
+serverseitig.
 
 ## Offline-Strategie
 

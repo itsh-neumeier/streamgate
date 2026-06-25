@@ -2,6 +2,7 @@ package io.streamgate.tv.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -28,11 +29,29 @@ fun LiveTvScreen(state: StreamGateUiState, model: StreamGateViewModel) {
                     .background(Color(0xCC101820))
                     .padding(20.dp)
             ) {
-                Text("${selected.number}  ${selected.name}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Row {
+                    Text("${selected.number}  ${selected.name}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "  ${state.activeStream?.qualityLabel ?: qualityLabel(state.selectedQuality)}",
+                        color = Color(0xFFFFC857),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 18.dp, top = 8.dp)
+                    )
+                }
             }
         }
         if (state.showChannelList) ChannelListOverlay(state.channels, state.selectedIndex, model::selectChannel)
         if (state.showMiniGuide && selected != null) MiniGuideOverlay(selected)
+        if (state.showQualityMenu) {
+            Box(modifier = Modifier.align(Alignment.TopEnd).padding(40.dp)) {
+                QualityOverlay(
+                    profiles = state.bootstrap?.streamProfiles.orEmpty(),
+                    selectedQuality = state.selectedQuality,
+                    onSelect = model::setQuality
+                )
+            }
+        }
         if (state.error != null) {
             Text(
                 state.error,
@@ -42,3 +61,5 @@ fun LiveTvScreen(state: StreamGateUiState, model: StreamGateViewModel) {
         }
     }
 }
+
+private fun qualityLabel(quality: String): String = if (quality == "sd-480p") "SD" else "HD"

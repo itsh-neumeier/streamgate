@@ -1,10 +1,11 @@
-import { Activity, Monitor, Package, Radio, Settings, Tv, Users } from 'lucide-react';
+import { Activity, Monitor, Package, Play, Radio, Settings, Tv, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import mpegts from 'mpegts.js';
 import { apiGet, apiPost, apiPut } from '../api/client';
-import type { Channel, ChannelPackage, Customer, Dashboard, Device, StreamSession } from '../api/types';
+import type { ActivationResult, Channel, ChannelPackage, Customer, Dashboard, Device, StreamOpenResult, StreamSession } from '../api/types';
 
-type Tab = 'dashboard' | 'customers' | 'devices' | 'channels' | 'packages' | 'streams' | 'config';
+type Tab = 'dashboard' | 'customers' | 'devices' | 'channels' | 'packages' | 'streams' | 'player' | 'config';
 
 const tabs: Array<{ id: Tab; label: string; Icon: typeof Activity }> = [
   { id: 'dashboard', label: 'Dashboard', Icon: Activity },
@@ -13,6 +14,7 @@ const tabs: Array<{ id: Tab; label: string; Icon: typeof Activity }> = [
   { id: 'channels', label: 'Sender', Icon: Tv },
   { id: 'packages', label: 'Pakete', Icon: Package },
   { id: 'streams', label: 'Streams', Icon: Radio },
+  { id: 'player', label: 'Webplayer', Icon: Play },
   { id: 'config', label: 'App-Konfiguration', Icon: Settings }
 ];
 
@@ -61,6 +63,7 @@ export function App() {
     if (activeTab === 'channels') return <ChannelsView channels={channels} onRefresh={refresh} />;
     if (activeTab === 'packages') return <PackagesView packages={packages} onRefresh={refresh} />;
     if (activeTab === 'streams') return <StreamsView streams={streams} />;
+    if (activeTab === 'player') return <WebPlayerView channels={channels.filter((channel) => channel.enabled)} />;
     return <ConfigView />;
   }, [activeTab, channels, customers, dashboard, devices, packages, streams]);
 
@@ -249,7 +252,7 @@ function StreamsView({ streams }: { streams: StreamSession[] }) {
     <DataSection>
       <table>
         <thead>
-          <tr><th>Kunde</th><th>Geraet</th><th>Sender</th><th>Status</th><th>Start</th></tr>
+          <tr><th>Kunde</th><th>Geraet</th><th>Sender</th><th>Qualitaet</th><th>Status</th><th>Start</th></tr>
         </thead>
         <tbody>
           {streams.map((stream) => (
@@ -257,6 +260,7 @@ function StreamsView({ streams }: { streams: StreamSession[] }) {
               <td>{stream.customerId}</td>
               <td>{stream.deviceId}</td>
               <td>{stream.channelId}</td>
+              <td>{stream.qualityLabel ?? stream.quality ?? '-'}</td>
               <td>{stream.status}</td>
               <td>{stream.openedAt}</td>
             </tr>
@@ -265,6 +269,154 @@ function StreamsView({ streams }: { streams: StreamSession[] }) {
       </table>
     </DataSection>
   );
+}
+
+function WebPlayerView({ channels }: { channels: Channel[] }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playerRef = useRef<{ unload: () => void; detachMediaElement: () => void; destroy: () => void } | null>(null);
+  const [activationCode, setActivationCode] = useState('');
+  const [deviceId, setDeviceId] = useState(() => window.localStorage.getItem('streamgateWebDeviceId') ?? '');
+  const [deviceToken, setDeviceToken] = useState(() => window.localStorage.getItem('streamgateWebDeviceToken') ?? '');
+  const [selectedChannelId, setSelectedChannelId] = useState(() => channels[0]?.id ?? '');
+  const [quality, setQuality] = useState<'hd' | 'sd-480p'>(() => (window.localStorage.getItem('streamgateWebQuality') === 'sd-480p' ? 'sd-480p' : 'hd'));
+  const [activeStream, setActiveStream] = useState<StreamOpenResult | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedChannelId && channels[0]) {
+      setSelectedChannelId(channels[0].id);
+    }
+  }, [channels, selectedChannelId]);
+
+  useEffect(() => () => destroyPlayer(playerRef.current), []);
+
+  const activate = async () => {
+    const result = await apiPost<ActivationResult>('/device/activate', {
+      activationCode,
+      deviceName: 'StreamGate Webplayer',
+      deviceType: 'android_tv',
+      appVersion: '0.1.0'
+    });
+    window.localStorage.setItem('streamgateWebDeviceId', result.deviceId);
+    window.localStorage.setItem('streamgateWebDeviceToken', result.deviceToken);
+    setDeviceId(result.deviceId);
+    setDeviceToken(result.deviceToken);
+    setActivationCode('');
+    setMessage('Webplayer aktiviert.');
+  };
+
+  const start = async () => {
+    if (!deviceId || !deviceToken) {
+      setMessage('Bitte zuerst mit Aktivierungscode aktivieren.');
+      return;
+    }
+    if (!selectedChannelId) {
+      setMessage('Bitte einen Sender auswaehlen.');
+      return;
+    }
+
+    window.localStorage.setItem('streamgateWebQuality', quality);
+    const stream = await apiPost<StreamOpenResult>(
+      '/stream/open',
+      { channelId: selectedChannelId, deviceId, quality },
+      { Authorization: `Bearer ${deviceToken}` }
+    );
+    setActiveStream(stream);
+    attachStream(stream.url);
+    setMessage(`Stream gestartet: ${stream.qualityLabel}`);
+  };
+
+  const stop = async () => {
+    if (activeStream) {
+      await apiPost('/stream/close', { streamSessionId: activeStream.streamSessionId });
+    }
+    destroyPlayer(playerRef.current);
+    playerRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.removeAttribute('src');
+      videoRef.current.load();
+    }
+    setActiveStream(null);
+    setMessage('Stream beendet.');
+  };
+
+  const logout = () => {
+    window.localStorage.removeItem('streamgateWebDeviceId');
+    window.localStorage.removeItem('streamgateWebDeviceToken');
+    setDeviceId('');
+    setDeviceToken('');
+    setActiveStream(null);
+    destroyPlayer(playerRef.current);
+    playerRef.current = null;
+  };
+
+  const attachStream = (url: string) => {
+    const video = videoRef.current;
+    if (!video) return;
+    destroyPlayer(playerRef.current);
+    playerRef.current = null;
+
+    if (mpegts.isSupported()) {
+      const player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url });
+      playerRef.current = player;
+      player.attachMediaElement(video);
+      player.load();
+      void video.play().catch(() => setMessage('Autoplay blockiert. Bitte Play im Videoplayer druecken.'));
+      return;
+    }
+
+    video.src = url;
+    void video.play().catch(() => setMessage('Autoplay blockiert. Bitte Play im Videoplayer druecken.'));
+  };
+
+  return (
+    <section className="player-layout">
+      <div className="player-surface">
+        <video ref={videoRef} className="webplayer-video" controls playsInline />
+      </div>
+      <aside className="player-controls">
+        <label>
+          Aktivierungscode
+          <div className="inline-control">
+            <input value={activationCode} onChange={(event) => setActivationCode(event.target.value.toUpperCase())} placeholder="AB12-CD34" />
+            <button onClick={() => void activate()}>Aktivieren</button>
+          </div>
+        </label>
+        <div className="device-state">
+          <span>Geraet</span>
+          <strong>{deviceId || 'nicht aktiviert'}</strong>
+          {deviceId ? <button onClick={logout}>Zuruecksetzen</button> : null}
+        </div>
+        <label>
+          Sender
+          <select value={selectedChannelId} onChange={(event) => setSelectedChannelId(event.target.value)}>
+            {channels.map((channel) => (
+              <option key={channel.id} value={channel.id}>{channel.number} - {channel.name}</option>
+            ))}
+          </select>
+        </label>
+        <div>
+          <span className="control-label">Qualitaet</span>
+          <div className="segmented">
+            <button className={quality === 'hd' ? 'active' : ''} onClick={() => setQuality('hd')}>HD</button>
+            <button className={quality === 'sd-480p' ? 'active' : ''} onClick={() => setQuality('sd-480p')}>SD</button>
+          </div>
+        </div>
+        <div className="player-actions">
+          <button className="primary" onClick={() => void start()}>Abspielen</button>
+          <button onClick={() => void stop()}>Stop</button>
+        </div>
+        {message ? <div className="notice compact">{message}</div> : null}
+      </aside>
+    </section>
+  );
+}
+
+function destroyPlayer(player: { unload: () => void; detachMediaElement: () => void; destroy: () => void } | null) {
+  if (!player) return;
+  player.unload();
+  player.detachMediaElement();
+  player.destroy();
 }
 
 function ConfigView() {

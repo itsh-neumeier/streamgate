@@ -1,11 +1,9 @@
 import cors from 'cors';
 import express from 'express';
 import morgan from 'morgan';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
-import type { ReadableStream } from 'node:stream/web';
-import { StreamTicketStore } from './stream-tickets.js';
-import { fetchTvheadendChannels, fetchTvheadendPlaylistChannels, openTvheadendStream, type ConnectorChannel } from './tvheadend-client.js';
+import { pipeH264Transcode } from './ffmpeg-transcoder.js';
+import { StreamTicketStore, type StreamQuality } from './stream-tickets.js';
+import { fetchTvheadendChannels, fetchTvheadendPlaylistChannels, type ConnectorChannel } from './tvheadend-client.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? process.env.TVHEADEND_CONNECTOR_PORT ?? 3100);
@@ -44,6 +42,15 @@ async function channels(): Promise<ConnectorChannel[]> {
 
 app.get('/health', (_request, response) => {
   response.json({ status: 'ok', service: 'streamgate-tvheadend-connector', mode: mockMode ? 'mock' : 'tvheadend' });
+});
+
+app.get('/stream-profiles', (_request, response) => {
+  response.json({
+    profiles: [
+      { id: 'hd', label: 'HD', description: 'Serverseitig als H.264 in Originalaufloesung transcodiert' },
+      { id: 'sd-480p', label: 'SD', description: 'Serverseitig als H.264 auf 480p transcodiert' }
+    ]
+  });
 });
 
 app.get('/channels', async (_request, response) => {
@@ -108,9 +115,12 @@ app.post('/streams/open', async (request, response) => {
     }
 
     if (mockMode) {
-      const issued = streamTickets.issue(channel.id, channel.profile);
+      const quality = normalizeQuality(request.body.quality);
+      const issued = streamTickets.issue(channel.id, channel.profile, quality);
       response.json({
         channelId: channel.id,
+        quality,
+        label: qualityLabel(quality),
         mimeType: 'application/x-mpegURL',
         ticket: issued.ticket,
         expiresIn: issued.expiresIn
@@ -119,9 +129,12 @@ app.post('/streams/open', async (request, response) => {
     }
 
     const profile = String(request.body.profile ?? tvheadendConfig.profile);
-    const issued = streamTickets.issue(channel.uuid, profile);
+    const quality = normalizeQuality(request.body.quality);
+    const issued = streamTickets.issue(channel.uuid, profile, quality);
     response.json({
       channelId: channel.uuid,
+      quality,
+      label: qualityLabel(quality),
       mimeType: 'video/mp2t',
       ticket: issued.ticket,
       expiresIn: issued.expiresIn
@@ -148,17 +161,20 @@ app.get('/stream/ticket/:ticket', async (request, response) => {
   response.on('close', () => abortController.abort());
 
   try {
-    const upstream = await openTvheadendStream(tvheadendConfig, streamTicket.channelId, streamTicket.profile, abortController.signal);
-    if (!upstream.ok || !upstream.body) {
-      response.status(502).json({ message: 'TVHeadend-Stream ist nicht verfuegbar.' });
-      return;
-    }
-
     response.status(200);
-    response.setHeader('content-type', upstream.headers.get('content-type') ?? 'video/mp2t');
+    response.setHeader('content-type', 'video/mp2t');
     response.setHeader('cache-control', 'no-store');
     response.setHeader('x-accel-buffering', 'no');
-    await pipeline(Readable.fromWeb(upstream.body as ReadableStream<Uint8Array>), response);
+    await pipeH264Transcode(
+      tvheadendConfig,
+      {
+        channelId: streamTicket.channelId,
+        profile: streamTicket.profile,
+        quality: streamTicket.quality,
+        signal: abortController.signal
+      },
+      response
+    );
   } catch (cause) {
     if (abortController.signal.aborted) {
       return;
@@ -189,3 +205,11 @@ https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
 app.listen(port, () => {
   console.log(`streamgate-tvheadend-connector listening on ${port}`);
 });
+
+function normalizeQuality(value: unknown): StreamQuality {
+  return value === 'sd-480p' ? 'sd-480p' : 'hd';
+}
+
+function qualityLabel(quality: StreamQuality) {
+  return quality === 'sd-480p' ? 'SD' : 'HD';
+}

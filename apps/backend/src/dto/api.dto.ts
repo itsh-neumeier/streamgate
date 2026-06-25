@@ -49,6 +49,11 @@ export class OpenStreamDto {
 
   @IsString()
   deviceId!: string;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['hd', 'sd-480p', 'original'])
+  quality?: 'hd' | 'sd-480p' | 'original';
 }
 
 export class CloseStreamDto {

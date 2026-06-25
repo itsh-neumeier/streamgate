@@ -5,9 +5,9 @@ StreamGate ist eine leichtgewichtige White-Label-TV-Plattform fuer Android-TV-St
 ## Komponenten
 
 - `apps/backend`: NestJS Middleman-API mit Device Activation, Bootstrap, Sendern, Streams, Heartbeat und Admin-API.
-- `apps/admin`: React/Vite Admin-Oberflaeche fuer Kunden, Geraete, Sender, Pakete, Streams und Branding.
+- `apps/admin`: React/Vite Admin-Oberflaeche fuer Kunden, Geraete, Sender, Pakete, Streams, Webplayer und Branding.
 - `apps/android-tv`: Kotlin Android-TV-App-Grundgeruest mit Aktivierung, Live-TV und Zapping-Debounce.
-- `services/tvheadend-connector`: serverseitiger TVHeadend-Adapter mit Mock-Modus.
+- `services/tvheadend-connector`: serverseitiger TVHeadend-Adapter mit Mock-Modus und FFmpeg H.264-Transcoding.
 - `services/proxy`: Nginx-basierter API- und Stream-Proxy fuer temporaere Stream-URLs.
 - `deploy`: lokale und produktionsnahe Compose-Dateien plus Nginx-Konfiguration.
 
@@ -40,7 +40,25 @@ Der MVP laeuft standardmaessig im Mock-Modus. Die REST-Endpunkte sind unter `/ap
 
 ## Android-TV-App
 
-Das Android-Projekt liegt in `apps/android-tv`. Es nutzt Kotlin, Jetpack Compose und AndroidX Media3. Der Client speichert ein Device Token, cached die letzte gueltige Bootstrap-Konfiguration lokal und fordert Streams ausschliesslich ueber StreamGate an.
+Das Android-Projekt liegt in `apps/android-tv`. Es nutzt Kotlin, Jetpack Compose und AndroidX Media3. Der Client speichert ein Device Token, cached die letzte gueltige Bootstrap-Konfiguration lokal und fordert Streams ausschliesslich ueber StreamGate an. Die Qualitaetseinstellung zeigt fuer Nutzer nur `HD` und `SD`.
+
+## Webplayer
+
+Der Admin-Container enthaelt einen Webplayer-Tab. Er wird wie ein Client per
+Aktivierungscode gebunden, nutzt Device Tokens und spielt temporaere
+StreamGate-URLs. Der Browser sieht keine TVHeadend-URL und keine Credentials.
+
+## Transcoding
+
+Bei realem TVHeadend-Betrieb liefert StreamGate fuer Nutzer keine
+TVHeadend-Passthrough-Streams aus. Der Connector transcodiert per FFmpeg:
+
+- `HD`: H.264/AAC in Originalaufloesung.
+- `SD`: H.264/AAC in 480p.
+
+Standard fuer Portainer/Produktion ist VAAPI (`FFMPEG_TRANSCODER=vaapi`) mit
+`/dev/dri/renderD128`. Fuer Hosts ohne Hardware-Encoding kann
+`FFMPEG_TRANSCODER=software` verwendet werden.
 
 ## GHCR Images
 
@@ -69,7 +87,7 @@ Produktive Deployments muessen HTTPS vor den Proxy setzen, Secrets per sicherem 
 
 ## TVHeadend
 
-TVHeadend-Zugangsdaten werden nur in Backend/Connector-Umgebungsvariablen konfiguriert. Die Android-App erhaelt nur temporaere StreamGate-Stream-URLs.
+TVHeadend-Zugangsdaten werden nur in Backend/Connector-Umgebungsvariablen konfiguriert. Android-App und Webplayer erhalten nur temporaere StreamGate-Stream-URLs.
 
 ## Sicherheit
 

@@ -182,6 +182,90 @@ input {
   font: inherit;
 }
 
+select {
+  width: 100%;
+  border: 1px solid #c9d3d8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #ffffff;
+}
+
+.player-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+.player-surface {
+  background: #101820;
+  border: 1px solid #24343c;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+
+.webplayer-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000000;
+}
+
+.player-controls {
+  display: grid;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #d9e1e4;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.inline-control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.device-state {
+  display: grid;
+  gap: 8px;
+  color: #38464d;
+}
+
+.device-state span,
+.control-label {
+  color: #38464d;
+  font-weight: 600;
+}
+
+.device-state strong {
+  overflow-wrap: anywhere;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.segmented button.active {
+  background: #2f6f88;
+  border-color: #2f6f88;
+  color: #ffffff;
+}
+
+.player-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.compact {
+  margin: 0;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -189,5 +273,9 @@ input {
 
   .sidebar {
     position: static;
+  }
+
+  .player-layout {
+    grid-template-columns: 1fr;
   }
 }

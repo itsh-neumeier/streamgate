@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 async function parseJson<T>(response: Response, path: string): Promise<T> {
   const contentType = response.headers.get('content-type') ?? 'unbekannter Content-Type';
@@ -19,15 +19,15 @@ async function parseJson<T>(response: Response, path: string): Promise<T> {
   }
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+export async function apiGet<T>(path: string, headers?: Record<string, string>): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
   return parseJson<T>(response, path);
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+export async function apiPost<T>(path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body)
   });
   return parseJson<T>(response, path);

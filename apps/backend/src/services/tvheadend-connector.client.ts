@@ -22,17 +22,17 @@ export class TvheadendConnectorClient {
     }>;
   }
 
-  async openStream(channelId: string, profile: string) {
+  async openStream(channelId: string, profile: string, quality: 'hd' | 'sd-480p' = 'hd') {
     const response = await fetch(`${this.baseUrl}/streams/open`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ channelId, profile })
+      body: JSON.stringify({ channelId, profile, quality })
     });
 
     if (!response.ok) {
       throw new Error(`TVHeadend connector returned ${response.status}`);
     }
 
-    return response.json() as Promise<{ channelId: string; mimeType: string; ticket: string; expiresIn: number }>;
+    return response.json() as Promise<{ channelId: string; mimeType: string; ticket: string; expiresIn: number; quality: 'hd' | 'sd-480p'; label: string }>;
   }
 }

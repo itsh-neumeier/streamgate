@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.streamgate.tv.data.Channel
+import io.streamgate.tv.data.StreamQualityOption
 
 @Composable
 fun ChannelListOverlay(channels: List<Channel>, selectedIndex: Int, onSelect: (Int) -> Unit) {
@@ -59,5 +60,37 @@ fun MiniGuideOverlay(channel: Channel) {
         Spacer(modifier = Modifier.padding(4.dp))
         Text("Jetzt: ${channel.name} Live", color = Color.White, fontSize = 18.sp)
         Text("Danach: ${channel.name} Magazin", color = Color(0xFFD7E3E8), fontSize = 18.sp)
+    }
+}
+
+@Composable
+fun QualityOverlay(profiles: List<StreamQualityOption>, selectedQuality: String, onSelect: (String) -> Unit) {
+    val items = if (profiles.isEmpty()) {
+        listOf(StreamQualityOption("hd", "HD"), StreamQualityOption("sd-480p", "SD"))
+    } else {
+        profiles
+    }
+
+    Column(
+        modifier = Modifier
+            .width(260.dp)
+            .background(Color(0xEE172026))
+            .padding(18.dp)
+    ) {
+        Text("Qualitaet", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        items.forEach { item ->
+            val selected = item.id == selectedQuality
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .border(2.dp, if (selected) Color(0xFFFFC857) else Color.Transparent)
+                    .background(if (selected) Color(0x553A7CA5) else Color.Transparent)
+                    .clickable { onSelect(item.id) }
+                    .padding(12.dp)
+            ) {
+                Text(item.label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }

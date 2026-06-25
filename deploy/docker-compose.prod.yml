@@ -21,6 +21,18 @@ services:
     env_file: ../.env
     environment:
       PORT: "3100"
+      FFMPEG_TRANSCODER: ${FFMPEG_TRANSCODER:-vaapi}
+      FFMPEG_LOG_LEVEL: ${FFMPEG_LOG_LEVEL:-warning}
+      VAAPI_DEVICE: ${VAAPI_DEVICE:-/dev/dri/renderD128}
+      HD_VIDEO_BITRATE: ${HD_VIDEO_BITRATE:-5500k}
+      HD_VIDEO_MAXRATE: ${HD_VIDEO_MAXRATE:-7000k}
+      HD_VIDEO_BUFSIZE: ${HD_VIDEO_BUFSIZE:-11000k}
+      SD_VIDEO_BITRATE: ${SD_VIDEO_BITRATE:-1400k}
+      SD_VIDEO_MAXRATE: ${SD_VIDEO_MAXRATE:-1800k}
+      SD_VIDEO_BUFSIZE: ${SD_VIDEO_BUFSIZE:-2800k}
+      SD_AUDIO_BITRATE: ${SD_AUDIO_BITRATE:-128k}
+    devices:
+      - ${VAAPI_RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
     restart: unless-stopped
 
   streamgate-proxy:

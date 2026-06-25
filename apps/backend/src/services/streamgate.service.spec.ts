@@ -21,7 +21,7 @@ describe('StreamGateService', () => {
       channels: async () => ({
         channels: [{ id: 'channel-uuid', uuid: 'channel-uuid', number: 1, name: 'Test TV', enabled: true, profile: 'pass' }]
       }),
-      openStream: async () => ({ channelId: 'channel-uuid', mimeType: 'video/mp2t', ticket: 'test-ticket', expiresIn: 60 })
+      openStream: async () => ({ channelId: 'channel-uuid', mimeType: 'video/mp2t', ticket: 'test-ticket', expiresIn: 60, quality: 'hd', label: 'HD' })
     } as unknown as TvheadendConnectorClient;
     const service = new StreamGateService(connector);
     const activation = service.activateDevice({
@@ -41,5 +41,6 @@ describe('StreamGateService', () => {
     expect(url.pathname).toBe('/stream/ticket/test-ticket');
     expect(url.search).toBe('');
     expect(opened.mimeType).toBe('video/mp2t');
+    expect(opened.qualityLabel).toBe('HD');
   });
 });

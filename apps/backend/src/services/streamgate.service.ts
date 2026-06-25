@@ -62,6 +62,8 @@ interface StreamSession {
   customerId: string;
   deviceId: string;
   channelId: string;
+  quality: 'hd' | 'sd-480p';
+  qualityLabel: string;
   status: 'active' | 'closed' | 'expired' | 'error';
   openedAt: string;
   closedAt?: string;
@@ -262,6 +264,10 @@ export class StreamGateService {
         favorites: true,
         channelNumbers: true
       },
+      streamProfiles: [
+        { id: 'hd', label: 'HD', description: 'H.264 in Originalaufloesung' },
+        { id: 'sd-480p', label: 'SD', description: 'H.264 480p fuer schwaches WLAN' }
+      ],
       limits: {
         maxConcurrentStreams: customer.maxConcurrentStreams,
         maxDevices: customer.maxDevices
@@ -328,7 +334,8 @@ export class StreamGateService {
       throw new BadRequestException('Maximale parallele Streams erreicht.');
     }
 
-    const stream = await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile);
+    const quality = this.normalizeQuality(dto.quality);
+    const stream = await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile, quality);
     const streamSessionId = this.id('str');
     const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:8088';
     const url = `${publicBaseUrl.replace(/\/$/, '')}/stream/ticket/${encodeURIComponent(stream.ticket)}`;
@@ -337,6 +344,8 @@ export class StreamGateService {
       customerId: customer.id,
       deviceId: device.id,
       channelId: channel.id,
+      quality,
+      qualityLabel: stream.label,
       status: 'active',
       openedAt: new Date().toISOString(),
       lastHeartbeatAt: new Date().toISOString(),
@@ -345,7 +354,7 @@ export class StreamGateService {
       url
     };
     this.streamSessions.push(session);
-    return { streamSessionId, url, expiresIn: stream.expiresIn, mimeType: stream.mimeType };
+    return { streamSessionId, url, expiresIn: stream.expiresIn, mimeType: stream.mimeType, quality, qualityLabel: stream.label };
   }
 
   closeStream(streamSessionId: string) {
@@ -609,6 +618,10 @@ export class StreamGateService {
 
   private id(prefix: string) {
     return `${prefix}_${randomBytes(6).toString('hex')}`;
+  }
+
+  private normalizeQuality(value?: string): 'hd' | 'sd-480p' {
+    return value === 'sd-480p' ? 'sd-480p' : 'hd';
   }
 
   private activationCode() {
