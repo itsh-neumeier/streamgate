@@ -55,15 +55,15 @@ und keine Credentials.
 
 Die Kunden-Webapp laeuft als eigener Container `streamgate-web` und ist in
 Portainer standardmaessig ueber `WEB_PORT=8081` erreichbar. Sie nutzt denselben
-Aktivierungscode-Flow wie Android-TV, speichert ein Device Token lokal im
-Browser und ruft Live-TV, Senderliste, Bootstrap und DVR ausschliesslich ueber
-StreamGate ab.
+Aktivierungscode-Flow wie Android-TV oder den im Admin gepflegten Kundenlogin,
+speichert ein Device Token lokal im Browser und ruft Live-TV, Senderliste,
+Bootstrap und DVR ausschliesslich ueber StreamGate ab.
 
 DVR-Timer werden nur angelegt, wenn DVR fuer den Kunden aktiv ist, der Sender im
 Kundenpaket liegt und der Sender Aufnahmen erlaubt. Pro Kunde darf zu einem
 Zeitpunkt nur eine Aufnahme geplant sein. Der TVHeadend-Aufnahmeuser wird in der
-Admin-Kundenverwaltung ueber `TVH User`, `TVH Profil` und `DVR Profil`
-festgelegt.
+Admin-Kundenverwaltung ueber `TVH User`, `TVH Passwort`, `HD Profil`,
+`SD Profil` und `DVR Profil` festgelegt.
 
 ## Transcoding
 

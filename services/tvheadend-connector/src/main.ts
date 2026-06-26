@@ -129,11 +129,12 @@ app.post('/streams/open', async (request, response) => {
       return;
     }
 
-    const profile = String(request.body.profile ?? tvheadendConfig.profile);
+    const requestTvheadendConfig = tvheadendConfigForRequest(request.body);
+    const profile = String(request.body.profile ?? requestTvheadendConfig.profile);
     const quality = normalizeQuality(request.body.quality);
-    const selectedProfile = streamMode === 'tvheadend-profile' ? qualityProfile(quality) : profile;
+    const selectedProfile = streamMode === 'tvheadend-profile' ? qualityProfile(quality, request.body) : profile;
     const mimeType = streamMode === 'tvheadend-profile' ? qualityMimeType(quality) : 'video/mp2t';
-    const issued = streamTickets.issue(channel.uuid, selectedProfile, quality, streamMode, mimeType);
+    const issued = streamTickets.issue(channel.uuid, selectedProfile, quality, streamMode, mimeType, Math.floor(Date.now() / 1000), requestTvheadendConfig);
     response.json({
       channelId: channel.uuid,
       quality,
@@ -168,7 +169,7 @@ app.get('/stream/ticket/:ticket', async (request, response) => {
   try {
     if (streamTicket.mode === 'tvheadend-profile') {
       await pipeTvheadendProfileStream(
-        tvheadendConfig,
+        streamTicket.tvheadend ?? tvheadendConfig,
         streamTicket.channelId,
         streamTicket.profile,
         abortController.signal,
@@ -179,7 +180,7 @@ app.get('/stream/ticket/:ticket', async (request, response) => {
     }
 
     await pipeH264Transcode(
-      tvheadendConfig,
+      streamTicket.tvheadend ?? tvheadendConfig,
       {
         channelId: streamTicket.channelId,
         profile: streamTicket.profile,
@@ -231,9 +232,24 @@ function normalizeStreamMode(value: unknown): StreamMode {
   return value === 'tvheadend-profile' ? 'tvheadend-profile' : 'streamgate';
 }
 
-function qualityProfile(quality: StreamQuality) {
+function tvheadendConfigForRequest(body: Record<string, unknown>) {
+  return {
+    baseUrl: tvheadendConfig.baseUrl,
+    username: String(body.tvheadendUsername || tvheadendConfig.username),
+    password: String(body.tvheadendPassword || tvheadendConfig.password),
+    profile: String(body.profile || tvheadendConfig.profile)
+  };
+}
+
+function qualityProfile(quality: StreamQuality, body: Record<string, unknown> = {}) {
   if (quality === 'sd-480p') {
+    if (typeof body.tvheadendSdProfile === 'string' && body.tvheadendSdProfile.trim()) {
+      return body.tvheadendSdProfile.trim();
+    }
     return process.env.TVHEADEND_SD_PROFILE ?? process.env.TVHEADEND_DEFAULT_PROFILE ?? 'pass';
+  }
+  if (typeof body.tvheadendHdProfile === 'string' && body.tvheadendHdProfile.trim()) {
+    return body.tvheadendHdProfile.trim();
   }
   return process.env.TVHEADEND_HD_PROFILE ?? process.env.TVHEADEND_DEFAULT_PROFILE ?? 'pass';
 }

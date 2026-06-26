@@ -18,6 +18,24 @@ export class ActivateDeviceDto {
   appVersion?: string;
 }
 
+export class CustomerLoginDto {
+  @IsString()
+  @IsNotEmpty()
+  username!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  password!: string;
+
+  @IsString()
+  @IsOptional()
+  deviceName?: string;
+
+  @IsString()
+  @IsOptional()
+  appVersion?: string;
+}
+
 export class HeartbeatDto {
   @IsString()
   deviceId!: string;

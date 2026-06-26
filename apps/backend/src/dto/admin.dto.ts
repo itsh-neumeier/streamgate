@@ -7,6 +7,14 @@ export class CreateCustomerDto {
   @IsString()
   @IsOptional()
   packageId?: string;
+
+  @IsString()
+  @IsOptional()
+  loginUsername?: string;
+
+  @IsString()
+  @IsOptional()
+  loginPassword?: string;
 }
 
 export class UpdateCustomerDto {
@@ -38,7 +46,19 @@ export class UpdateCustomerDto {
 
   @IsString()
   @IsOptional()
+  loginUsername?: string;
+
+  @IsString()
+  @IsOptional()
+  loginPassword?: string;
+
+  @IsString()
+  @IsOptional()
   tvheadendUsername?: string;
+
+  @IsString()
+  @IsOptional()
+  tvheadendPassword?: string;
 
   @IsString()
   @IsOptional()
@@ -47,6 +67,14 @@ export class UpdateCustomerDto {
   @IsString()
   @IsOptional()
   dvrProfile?: string;
+
+  @IsString()
+  @IsOptional()
+  tvheadendHdProfile?: string;
+
+  @IsString()
+  @IsOptional()
+  tvheadendSdProfile?: string;
 }
 
 export class CreateActivationCodeDto {

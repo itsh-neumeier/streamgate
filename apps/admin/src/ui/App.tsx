@@ -2,7 +2,7 @@ import { Activity, Monitor, Package, Play, Radio, Settings, Tv, Users } from 'lu
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mpegts from 'mpegts.js';
-import { apiGet, apiPost, apiPut } from '../api/client';
+import { apiDelete, apiGet, apiPost, apiPut } from '../api/client';
 import type { Channel, ChannelPackage, Customer, Dashboard, Device, StreamOpenResult, StreamSession } from '../api/types';
 
 type Tab = 'dashboard' | 'customers' | 'devices' | 'channels' | 'packages' | 'streams' | 'player' | 'config';
@@ -130,6 +130,12 @@ function CustomersView({ customers, packages, onRefresh }: { customers: Customer
     await onRefresh();
   };
 
+  const deleteCustomer = async (customer: Customer) => {
+    if (!window.confirm(`Kunde "${customer.name}" wirklich loeschen? Geraete und aktive Streams werden deaktiviert.`)) return;
+    await apiDelete(`/admin/customers/${customer.id}`);
+    await onRefresh();
+  };
+
   const createCode = async (customerId: string) => {
     const result = await apiPost<{ code: string }>(`/admin/customers/${customerId}/activation-codes`, { expiresInHours: 72 });
     window.alert(`Aktivierungscode: ${result.code}`);
@@ -139,7 +145,7 @@ function CustomersView({ customers, packages, onRefresh }: { customers: Customer
     <DataSection action={<button onClick={() => void createCustomer()}>Kunde anlegen</button>}>
       <table>
         <thead>
-          <tr><th>Name</th><th>Status</th><th>Paket</th><th>Geraete</th><th>Streams</th><th>DVR</th><th>TVH User</th><th>TVH Profil</th><th>DVR Profil</th><th /></tr>
+          <tr><th>Name</th><th>Status</th><th>Paket</th><th>Geraete</th><th>Streams</th><th>DVR</th><th>Login</th><th>Passwort</th><th>TVH User</th><th>TVH Passwort</th><th>HD Profil</th><th>SD Profil</th><th>DVR Profil</th><th /></tr>
         </thead>
         <tbody>
           {customers.map((customer) => (
@@ -185,6 +191,22 @@ function CustomersView({ customers, packages, onRefresh }: { customers: Customer
               <td>
                 <input
                   className="table-input"
+                  defaultValue={customer.loginUsername ?? ''}
+                  placeholder="kunde-login"
+                  onBlur={(event) => event.target.value !== (customer.loginUsername ?? '') && void updateCustomer(customer, { loginUsername: event.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="table-input"
+                  type="password"
+                  placeholder={customer.loginPasswordSet ? 'gesetzt' : 'neu setzen'}
+                  onBlur={(event) => event.target.value && void updateCustomer(customer, { loginPassword: event.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="table-input"
                   defaultValue={customer.tvheadendUsername ?? ''}
                   placeholder={`sg_${customer.id}`}
                   onBlur={(event) => event.target.value !== (customer.tvheadendUsername ?? '') && void updateCustomer(customer, { tvheadendUsername: event.target.value })}
@@ -193,8 +215,23 @@ function CustomersView({ customers, packages, onRefresh }: { customers: Customer
               <td>
                 <input
                   className="table-input"
-                  defaultValue={customer.tvheadendProfile ?? 'pass'}
-                  onBlur={(event) => event.target.value !== (customer.tvheadendProfile ?? 'pass') && void updateCustomer(customer, { tvheadendProfile: event.target.value })}
+                  type="password"
+                  placeholder={customer.tvheadendPasswordSet ? 'gesetzt' : 'TVH Passwort'}
+                  onBlur={(event) => event.target.value && void updateCustomer(customer, { tvheadendPassword: event.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="table-input"
+                  defaultValue={customer.tvheadendHdProfile ?? customer.tvheadendProfile ?? 'pass'}
+                  onBlur={(event) => event.target.value !== (customer.tvheadendHdProfile ?? customer.tvheadendProfile ?? 'pass') && void updateCustomer(customer, { tvheadendHdProfile: event.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="table-input"
+                  defaultValue={customer.tvheadendSdProfile ?? customer.tvheadendProfile ?? 'pass'}
+                  onBlur={(event) => event.target.value !== (customer.tvheadendSdProfile ?? customer.tvheadendProfile ?? 'pass') && void updateCustomer(customer, { tvheadendSdProfile: event.target.value })}
                 />
               </td>
               <td>
@@ -204,7 +241,10 @@ function CustomersView({ customers, packages, onRefresh }: { customers: Customer
                   onBlur={(event) => event.target.value !== (customer.dvrProfile ?? 'default') && void updateCustomer(customer, { dvrProfile: event.target.value })}
                 />
               </td>
-              <td><button onClick={() => void createCode(customer.id)}>Code</button></td>
+              <td className="row-actions">
+                <button onClick={() => void createCode(customer.id)}>Code</button>
+                <button onClick={() => void deleteCustomer(customer)}>Loeschen</button>
+              </td>
             </tr>
           ))}
         </tbody>

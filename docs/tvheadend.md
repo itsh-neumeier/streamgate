@@ -66,10 +66,11 @@ MPEG-TS (`video/mp2t`) oder HLS die robusteren Ausgabeformen.
 
 ## DVR-User
 
-Pro Kunde kann im Adminbereich ein `tvheadendUsername`, ein `tvheadendProfile`
-und ein `dvrProfile` hinterlegt werden. StreamGate nutzt diese Werte beim
-Anlegen von DVR-Timern und gibt sie nicht an Clients aus. Im MVP speichert
-StreamGate Timer intern und ruft den Connector mit den normalisierten
+Pro Kunde kann im Adminbereich ein `tvheadendUsername`, ein
+`tvheadendPassword`, ein HD-Profil, ein SD-Profil und ein `dvrProfile`
+hinterlegt werden. StreamGate nutzt diese Werte beim Oeffnen von Streams und
+beim Anlegen von DVR-Timern, gibt sie aber nicht an Clients aus. Im MVP
+speichert StreamGate Timer intern und ruft den Connector mit den normalisierten
 TVHeadend-Daten auf; spaeter kann der Connector diese Daten auf konkrete
 TVHeadend-DVR-API-Aufrufe abbilden.
 

@@ -22,11 +22,31 @@ export class TvheadendConnectorClient {
     }>;
   }
 
-  async openStream(channelId: string, profile: string, quality: 'hd' | 'sd-480p' = 'hd') {
+  async openStream(
+    channelId: string,
+    profile: string,
+    quality: 'hd' | 'sd-480p' = 'hd',
+    tvheadend?: {
+      username?: string;
+      password?: string;
+      defaultProfile?: string;
+      hdProfile?: string;
+      sdProfile?: string;
+      dvrProfile?: string;
+    }
+  ) {
     const response = await fetch(`${this.baseUrl}/streams/open`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ channelId, profile, quality })
+      body: JSON.stringify({
+        channelId,
+        profile: tvheadend?.defaultProfile ?? profile,
+        quality,
+        tvheadendUsername: tvheadend?.username,
+        tvheadendPassword: tvheadend?.password,
+        tvheadendHdProfile: tvheadend?.hdProfile,
+        tvheadendSdProfile: tvheadend?.sdProfile
+      })
     });
 
     if (!response.ok) {
@@ -48,6 +68,7 @@ export class TvheadendConnectorClient {
   async createTimer(body: {
     customerId: string;
     tvheadendUsername: string;
+    tvheadendPassword?: string;
     tvheadendProfile: string;
     dvrProfile: string;
     channelId: string;

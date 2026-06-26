@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { ActivateDeviceDto, CloseStreamDto, CreateDvrTimerDto, HeartbeatDto, OpenStreamDto, UpdateFavoritesDto } from '../dto/api.dto';
+import { ActivateDeviceDto, CloseStreamDto, CreateDvrTimerDto, CustomerLoginDto, HeartbeatDto, OpenStreamDto, UpdateFavoritesDto } from '../dto/api.dto';
 import { StreamGateService } from '../services/streamgate.service';
 
 @Controller('api')
@@ -10,6 +10,11 @@ export class ApiController {
   @Post('device/activate')
   activate(@Body() dto: ActivateDeviceDto) {
     return this.streamGate.activateDevice(dto);
+  }
+
+  @Post('customer/login')
+  customerLogin(@Body() dto: CustomerLoginDto) {
+    return this.streamGate.customerLogin(dto);
   }
 
   @Post('device/logout')

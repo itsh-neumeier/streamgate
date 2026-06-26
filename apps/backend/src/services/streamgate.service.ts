@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
-import { ActivateDeviceDto, CreateDvrTimerDto, HeartbeatDto, OpenStreamDto } from '../dto/api.dto';
+import { ActivateDeviceDto, CreateDvrTimerDto, CustomerLoginDto, HeartbeatDto, OpenStreamDto } from '../dto/api.dto';
 import {
   CreateActivationCodeDto,
   CreateCustomerDto,
@@ -22,9 +22,14 @@ interface Customer {
   maxDevices: number;
   maxConcurrentStreams: number;
   dvrEnabled: boolean;
+  loginUsername?: string;
+  loginPasswordHash?: string;
   tvheadendUsername?: string;
+  tvheadendPassword?: string;
   tvheadendProfile?: string;
   dvrProfile?: string;
+  tvheadendHdProfile?: string;
+  tvheadendSdProfile?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -123,9 +128,14 @@ export class StreamGateService {
       maxDevices: 3,
       maxConcurrentStreams: 2,
       dvrEnabled: true,
+      loginUsername: 'max',
+      loginPasswordHash: this.hashCustomerPassword('streamgate'),
       tvheadendUsername: 'sg_cust_123',
+      tvheadendPassword: 'streamgate',
       tvheadendProfile: 'pass',
       dvrProfile: 'default',
+      tvheadendHdProfile: 'prd-matroska_h264_transcode',
+      tvheadendSdProfile: 'prd-matroska_h264_transcode_sd',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -239,6 +249,34 @@ export class StreamGateService {
     code.usedAt = now;
     code.usedByDeviceId = deviceId;
 
+    return { deviceId, deviceToken, customerId: customer.id };
+  }
+
+  customerLogin(dto: CustomerLoginDto) {
+    const username = dto.username.trim().toLowerCase();
+    const customer = this.customers.find((item) => item.status === 'active' && item.loginUsername?.toLowerCase() === username);
+    if (!customer || !customer.loginPasswordHash || customer.loginPasswordHash !== this.hashCustomerPassword(dto.password)) {
+      throw new UnauthorizedException('Kundenzugangsdaten sind ungueltig.');
+    }
+    const existingDeviceCount = this.devices.filter((device) => device.customerId === customer.id && device.status !== 'reset').length;
+    if (existingDeviceCount >= customer.maxDevices) {
+      throw new BadRequestException('Maximale Geraeteanzahl erreicht.');
+    }
+    const deviceId = this.id('dev');
+    const deviceToken = this.signDeviceToken(deviceId);
+    const now = new Date().toISOString();
+    this.devices.push({
+      id: deviceId,
+      customerId: customer.id,
+      name: dto.deviceName?.trim() || 'Webplayer',
+      deviceTokenHash: this.hash(deviceToken),
+      status: 'active',
+      appVersion: dto.appVersion,
+      lastSeenAt: now,
+      updateChannel: 'stable',
+      createdAt: now,
+      updatedAt: now
+    });
     return { deviceId, deviceToken, customerId: customer.id };
   }
 
@@ -388,7 +426,7 @@ export class StreamGateService {
     }
 
     const quality = this.normalizeQuality(dto.quality);
-    const stream = await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile, quality);
+    const stream = await this.connector.openStream(channel.tvheadendChannelUuid, channel.defaultStreamProfile, quality, this.tvheadendAccessForCustomer(customer));
     const streamSessionId = this.id('str');
     const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:8088';
     const url = `${publicBaseUrl.replace(/\/$/, '')}/stream/ticket/${encodeURIComponent(stream.ticket)}`;
@@ -474,6 +512,7 @@ export class StreamGateService {
     const connectorTimer = await this.connector.createTimer({
       customerId: customer.id,
       tvheadendUsername,
+      tvheadendPassword: customer.tvheadendPassword,
       tvheadendProfile: customer.tvheadendProfile ?? 'pass',
       dvrProfile: customer.dvrProfile ?? 'default',
       channelId: channel.tvheadendChannelUuid,
@@ -517,12 +556,16 @@ export class StreamGateService {
   }
 
   adminCustomers() {
-    return { customers: this.customers };
+    return { customers: this.customers.map((customer) => this.customerForAdmin(customer)) };
   }
 
   createCustomer(dto: CreateCustomerDto) {
     if (dto.packageId && !this.packagesData.some((pkg) => pkg.id === dto.packageId)) {
       throw new NotFoundException('Paket nicht gefunden.');
+    }
+    const loginUsername = dto.loginUsername?.trim();
+    if (loginUsername && this.customers.some((customer) => customer.loginUsername?.toLowerCase() === loginUsername.toLowerCase())) {
+      throw new BadRequestException('Kundenlogin ist bereits vergeben.');
     }
     const now = new Date().toISOString();
     const customer: Customer = {
@@ -533,15 +576,17 @@ export class StreamGateService {
       maxDevices: 3,
       maxConcurrentStreams: 2,
       dvrEnabled: false,
+      loginUsername: loginUsername || undefined,
+      loginPasswordHash: dto.loginPassword ? this.hashCustomerPassword(dto.loginPassword) : undefined,
       createdAt: now,
       updatedAt: now
     };
     this.customers.push(customer);
-    return customer;
+    return this.customerForAdmin(customer);
   }
 
   adminCustomer(id: string) {
-    return this.mustCustomer(id);
+    return this.customerForAdmin(this.mustCustomer(id));
   }
 
   updateCustomer(id: string, dto: UpdateCustomerDto) {
@@ -549,9 +594,27 @@ export class StreamGateService {
     if (dto.packageId && !this.packagesData.some((pkg) => pkg.id === dto.packageId)) {
       throw new NotFoundException('Paket nicht gefunden.');
     }
+    if (dto.loginUsername) {
+      const loginUsername = dto.loginUsername.trim();
+      const duplicate = this.customers.some((item) => item.id !== customer.id && item.loginUsername?.toLowerCase() === loginUsername.toLowerCase());
+      if (duplicate) {
+        throw new BadRequestException('Kundenlogin ist bereits vergeben.');
+      }
+    }
     const normalized: UpdateCustomerDto = { ...dto };
+    if ('loginUsername' in dto) {
+      normalized.loginUsername = dto.loginUsername?.trim() || undefined;
+    }
+    if ('loginPassword' in dto) {
+      customer.loginPasswordHash = dto.loginPassword ? this.hashCustomerPassword(dto.loginPassword) : undefined;
+      delete normalized.loginPassword;
+    }
     if ('tvheadendUsername' in dto) {
       normalized.tvheadendUsername = dto.tvheadendUsername?.trim() || undefined;
+    }
+    if ('tvheadendPassword' in dto) {
+      customer.tvheadendPassword = dto.tvheadendPassword?.trim() || undefined;
+      delete normalized.tvheadendPassword;
     }
     if ('tvheadendProfile' in dto) {
       normalized.tvheadendProfile = dto.tvheadendProfile?.trim() || undefined;
@@ -559,8 +622,39 @@ export class StreamGateService {
     if ('dvrProfile' in dto) {
       normalized.dvrProfile = dto.dvrProfile?.trim() || undefined;
     }
+    if ('tvheadendHdProfile' in dto) {
+      normalized.tvheadendHdProfile = dto.tvheadendHdProfile?.trim() || undefined;
+    }
+    if ('tvheadendSdProfile' in dto) {
+      normalized.tvheadendSdProfile = dto.tvheadendSdProfile?.trim() || undefined;
+    }
     Object.assign(customer, normalized, { updatedAt: new Date().toISOString() });
-    return customer;
+    return this.customerForAdmin(customer);
+  }
+
+  deleteCustomer(id: string) {
+    const customer = this.mustCustomer(id);
+    const now = new Date().toISOString();
+    customer.status = 'deleted';
+    customer.updatedAt = now;
+    this.devices
+      .filter((device) => device.customerId === id)
+      .forEach((device) => {
+        device.status = 'reset';
+        device.updatedAt = now;
+      });
+    this.activationCodes
+      .filter((code) => code.customerId === id && code.status === 'unused')
+      .forEach((code) => {
+        code.status = 'revoked';
+      });
+    this.streamSessions
+      .filter((session) => session.customerId === id && session.status === 'active')
+      .forEach((session) => {
+        session.status = 'closed';
+        session.closedAt = now;
+      });
+    return this.customerForAdmin(customer);
   }
 
   createActivationCode(customerId: string, dto: CreateActivationCodeDto) {
@@ -732,6 +826,39 @@ export class StreamGateService {
     return new Set(customerPackage?.channelIds ?? []);
   }
 
+  private tvheadendAccessForCustomer(customer: Customer) {
+    return {
+      username: customer.tvheadendUsername,
+      password: customer.tvheadendPassword,
+      defaultProfile: customer.tvheadendProfile,
+      hdProfile: customer.tvheadendHdProfile,
+      sdProfile: customer.tvheadendSdProfile,
+      dvrProfile: customer.dvrProfile
+    };
+  }
+
+  private customerForAdmin(customer: Customer) {
+    return {
+      id: customer.id,
+      name: customer.name,
+      status: customer.status,
+      packageId: customer.packageId,
+      maxDevices: customer.maxDevices,
+      maxConcurrentStreams: customer.maxConcurrentStreams,
+      dvrEnabled: customer.dvrEnabled,
+      loginUsername: customer.loginUsername,
+      tvheadendUsername: customer.tvheadendUsername,
+      tvheadendProfile: customer.tvheadendProfile,
+      dvrProfile: customer.dvrProfile,
+      tvheadendHdProfile: customer.tvheadendHdProfile,
+      tvheadendSdProfile: customer.tvheadendSdProfile,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt,
+      loginPasswordSet: Boolean(customer.loginPasswordHash),
+      tvheadendPasswordSet: Boolean(customer.tvheadendPassword)
+    };
+  }
+
   private resolveDevice(authorization?: string) {
     const device = this.deviceFromToken(authorization);
     if (device) {
@@ -823,6 +950,11 @@ export class StreamGateService {
 
   private hash(value: string) {
     return createHash('sha256').update(value).digest('hex');
+  }
+
+  private hashCustomerPassword(value: string) {
+    const secret = process.env.CUSTOMER_PASSWORD_SECRET ?? process.env.DEVICE_TOKEN_SECRET ?? 'streamgate-dev-secret';
+    return this.hash(`${value}.${secret}`);
   }
 
   private id(prefix: string) {

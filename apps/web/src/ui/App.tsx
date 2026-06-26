@@ -12,6 +12,8 @@ export function App() {
   const [deviceId, setDeviceId] = useState(() => localStorage.getItem('streamgateCustomerDeviceId') ?? '');
   const [deviceToken, setDeviceToken] = useState(() => localStorage.getItem('streamgateCustomerDeviceToken') ?? '');
   const [activationCode, setActivationCode] = useState('');
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [deviceName, setDeviceName] = useState(() => localStorage.getItem('streamgateCustomerDeviceName') ?? 'Webplayer');
   const [bootstrap, setBootstrap] = useState<BootstrapConfig | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -59,6 +61,29 @@ export function App() {
       setMessage('Webplayer aktiviert.');
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Aktivierung fehlgeschlagen.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async () => {
+    setLoading(true);
+    try {
+      const result = await apiPost<ActivationResult>('/customer/login', {
+        username: loginUsername,
+        password: loginPassword,
+        deviceName,
+        appVersion: 'web-0.1.0'
+      });
+      localStorage.setItem('streamgateCustomerDeviceId', result.deviceId);
+      localStorage.setItem('streamgateCustomerDeviceToken', result.deviceToken);
+      localStorage.setItem('streamgateCustomerDeviceName', deviceName);
+      setDeviceId(result.deviceId);
+      setDeviceToken(result.deviceToken);
+      setLoginPassword('');
+      setMessage('Webplayer angemeldet.');
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Anmeldung fehlgeschlagen.');
     } finally {
       setLoading(false);
     }
@@ -179,10 +204,14 @@ export function App() {
       <main className="activation-page">
         <section className="activation-panel">
           <h1>StreamGate Web</h1>
-          <p>Aktivieren Sie diesen Browser mit Ihrem Freischaltcode.</p>
+          <p>Aktivieren Sie diesen Browser per Code oder melden Sie sich mit Kundenzugangsdaten an.</p>
           <label>Aktivierungscode<input value={activationCode} onChange={(event) => setActivationCode(event.target.value.toUpperCase())} placeholder="AB12-CD34" /></label>
           <label>Geraetename<input value={deviceName} onChange={(event) => setDeviceName(event.target.value)} /></label>
           <button className="primary" disabled={loading || !activationCode} onClick={() => void activate()}>Aktivieren</button>
+          <div className="divider">oder</div>
+          <label>Kundenlogin<input value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} placeholder="benutzername" /></label>
+          <label>Passwort<input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label>
+          <button disabled={loading || !loginUsername || !loginPassword} onClick={() => void login()}>Anmelden</button>
           {message ? <div className="notice">{message}</div> : null}
         </section>
       </main>

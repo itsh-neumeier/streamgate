@@ -9,6 +9,12 @@ export interface StreamTicket {
   quality: StreamQuality;
   mode: StreamMode;
   mimeType: string;
+  tvheadend?: {
+    baseUrl: string;
+    username: string;
+    password: string;
+    profile: string;
+  };
   expiresAt: number;
 }
 
@@ -23,11 +29,15 @@ export class StreamTicketStore {
     quality: StreamQuality = 'hd',
     mode: StreamMode = 'streamgate',
     mimeType = 'video/mp2t',
-    now = Math.floor(Date.now() / 1000)
+    now = Math.floor(Date.now() / 1000),
+    tvheadend?: StreamTicket['tvheadend']
   ) {
     this.prune(now);
     const ticket = randomBytes(32).toString('base64url');
-    const value = { channelId, profile, quality, mode, mimeType, expiresAt: now + this.ttlSeconds };
+    const value: StreamTicket = { channelId, profile, quality, mode, mimeType, expiresAt: now + this.ttlSeconds };
+    if (tvheadend) {
+      value.tvheadend = tvheadend;
+    }
     this.tickets.set(ticket, value);
     return { ticket, expiresIn: this.ttlSeconds, ...value };
   }

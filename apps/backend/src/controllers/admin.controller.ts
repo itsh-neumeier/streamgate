@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
 import { CreateActivationCodeDto, CreateCustomerDto, PreviewStreamDto, UpdateChannelDto, UpdateCustomerDto, UpdateDeviceDto, UpdatePackageDto } from '../dto/admin.dto';
 import { StreamGateService } from '../services/streamgate.service';
 
@@ -24,6 +24,11 @@ export class AdminController {
   @Put('customers/:id')
   updateCustomer(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
     return this.streamGate.updateCustomer(id, dto);
+  }
+
+  @Delete('customers/:id')
+  deleteCustomer(@Param('id') id: string) {
+    return this.streamGate.deleteCustomer(id);
   }
 
   @Post('customers/:id/activation-codes')

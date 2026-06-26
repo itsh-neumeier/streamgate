@@ -15,6 +15,20 @@ Aktiviert ein Android-TV-Geraet per Code und gibt ein Device Token zurueck.
 }
 ```
 
+### POST /api/customer/login
+
+Meldet die Kunden-Webapp mit den im Admin gepflegten Zugangsdaten an und gibt
+ebenfalls ein Device Token zurueck.
+
+```json
+{
+  "username": "max",
+  "password": "streamgate",
+  "deviceName": "Browser",
+  "appVersion": "web-0.1.0"
+}
+```
+
 ### POST /api/device/heartbeat
 
 Aktualisiert Online-Status, App-Version, aktuellen Sender und Playerstatus.
@@ -140,4 +154,7 @@ Aktivierungscode, Device Token und Kunden-Streamlimit. Der Endpoint ist fuer den
 Admin-Webplayer gedacht und erzeugt keine normale `StreamSession`.
 
 `PUT /admin/customers/:id` akzeptiert neben Kundenstatus, Paket und Limits auch
-`tvheadendUsername`, `tvheadendProfile` und `dvrProfile`.
+`loginUsername`, `loginPassword`, `tvheadendUsername`, `tvheadendPassword`,
+`tvheadendHdProfile`, `tvheadendSdProfile` und `dvrProfile`. Passwortfelder
+werden nicht in Admin-Responses zurueckgegeben; stattdessen kommen
+`loginPasswordSet` und `tvheadendPasswordSet`.

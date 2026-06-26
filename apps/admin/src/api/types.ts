@@ -15,9 +15,16 @@ export interface Customer {
   maxDevices: number;
   maxConcurrentStreams: number;
   dvrEnabled: boolean;
+  loginUsername?: string;
+  loginPassword?: string;
+  loginPasswordSet?: boolean;
   tvheadendUsername?: string;
+  tvheadendPassword?: string;
+  tvheadendPasswordSet?: boolean;
   tvheadendProfile?: string;
   dvrProfile?: string;
+  tvheadendHdProfile?: string;
+  tvheadendSdProfile?: string;
 }
 
 export interface Device {
